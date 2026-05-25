@@ -1,0 +1,15 @@
+name: Dependabot
+
+on:
+  schedule:
+    - cron: '0 0 * * 0' # weekly
+  push:
+    branches: [ main ]
+
+jobs:
+  dependabot:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Dependabot updates
+        uses: dependabot/fetch-metadata@v1

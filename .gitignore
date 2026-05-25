@@ -1,0 +1,18 @@
+# Typical .gitignore for Home Assistant add-ons
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+# Virtualenv
+.venv/
+# Node
+node_modules/
+# Build artifacts
+dist/
+build/
+# Logs
+*.log
+# Secrets
+.env
+# Temporary files
+*.tmp

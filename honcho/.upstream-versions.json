@@ -1,0 +1,5 @@
+{
+  "postgres": "15",
+  "pgvector": "latest",
+  "redis": "8.2"
+}

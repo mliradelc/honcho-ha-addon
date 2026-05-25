@@ -1,0 +1,21 @@
+name: Release
+
+on:
+  push:
+    paths:
+      - 'honcho/config.yaml'
+    branches:
+      - main
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create GitHub Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION=$(grep '^version:' honcho/config.yaml | cut -d' ' -f2 | tr -d '"')
+          echo "Creating release v$VERSION"
+          gh release create v$VERSION --title "Honcho Add-on v$VERSION" --notes "Automated release"

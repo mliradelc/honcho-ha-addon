@@ -30,7 +30,7 @@ Modelled on [`hermes-ha-addon`](https://github.com/WolframRavenwolf/hermes-ha-ad
 | `git_token` | _(empty)_ | Optional PAT for private mirrors. |
 | `auto_update` | `false` | If `true`, runs `git pull --ff-only` at every restart. |
 | `db_mode` | `embedded` | `embedded` ships an in-container Postgres+pgvector. `external` uses `db_url`. |
-| `db_url` | _(empty)_ | `postgres://…` URL when `db_mode: external`. |
+| `db_url` | _(empty)_ | `postgres://…` URL when `db_mode=external`. |
 | `redis_mode` | `embedded` | `embedded` ships an in-container Redis. `external` uses `redis_url`. |
 | `redis_url` | _(empty)_ | `redis://…` URL when `redis_mode: external`. |
 | `api_port` | `8000` | Internal port the Honcho FastAPI app listens on. |

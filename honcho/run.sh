@@ -1,13 +1,17 @@
 #!/command/with-contenv bash
-# Honcho Add-on Entrypoint (adapted from Hermes)
+# Honcho Add-on Entrypoint
 set -euo pipefail
+
 OPTIONS_FILE="/data/options.json"
 if [ ! -f "$OPTIONS_FILE" ]; then
     echo "[run] FATAL: $OPTIONS_FILE not found"
     exit 1
 fi
-opt() { jq -r ".${1} // empty" "$OPTIONS_FILE"; }
+
+opt()    { jq -r ".${1} // empty" "$OPTIONS_FILE"; }
 opt_bool() { jq -r ".${1} // false" "$OPTIONS_FILE"; }
+
+# Read options
 GIT_URL=$(opt git_url)
 GIT_REF=$(opt git_ref)
 GIT_TOKEN=$(opt git_token)
@@ -18,58 +22,270 @@ REDIS_MODE=$(opt redis_mode)
 REDIS_URL=$(opt redis_url)
 API_PORT=$(opt api_port)
 ACCESS_PASSWORD=$(opt access_password)
-ENV_VARS=$(jq -c ".env_vars // []" "$OPTIONS_FILE")
-# Setup timezone if provided via HA env TZ
-if [ -n "$TZ" ] && [ -f "/usr/share/zoneinfo/$TZ" ]; then
+
+# Persistent storage
+HONCHO_HOME="/config/honcho"
+mkdir -p "$HONCHO_HOME"/{source,venv,pgdata,redis,logs}
+
+# Timezone (from HA env TZ)
+if [ -n "${TZ:-}" ] && [ -f "/usr/share/zoneinfo/$TZ" ]; then
     ln -snf "/usr/share/zoneinfo/$TZ" /etc/localtime
     echo "$TZ" > /etc/timezone
 fi
-# Persistent storage path
-HONCHO_HOME="/config/honcho"
-mkdir -p "$HONCHO_HOME"
-# Clone or update source
-SRC_DIR="$HONCHO_HOME/source"
-if [ ! -d "$SRC_DIR/.git" ]; then
-    git clone "$GIT_URL" "$SRC_DIR"
-    cd "$SRC_DIR"
-    if [ -n "$GIT_REF" ]; then git checkout "$GIT_REF"; fi
-else
-    cd "$SRC_DIR"
-    if [ "$AUTO_UPDATE" = "true" ]; then
-        git stash
-        git pull --ff-only || true
-        git stash pop || true
+
+# Postgres (embedded mode)
+start_postgres() {
+    local pgdata="$HONCHO_HOME/pgdata"
+    if [ ! -f "$pgdata/PG_VERSION" ]; then
+        echo "[run] Initialising Postgres data directory..."
+        initdb -D "$pgdata" --username=postgres --auth=trust 2>&1 | tee -a "$HONCHO_HOME/logs/initdb.log"
     fi
-fi
-# Setup virtualenv and install editable
-VENV_DIR="$HONCHO_HOME/venv"
-if [ ! -d "$VENV_DIR" ]; then
-    python3 -m venv "$VENV_DIR"
-fi
-source "$VENV_DIR/bin/activate"
-uv pip install -e .
-# Export env vars for Honcho app
-for kv in $(echo "$ENV_VARS" | jq -r '.[] | "\(.name)=\(.value)"'); do
-    export "$kv"
-done
-# Configure DB connection
-if [ "$DB_MODE" = "embedded" ]; then
-    # Start embedded Postgres and Redis
-    PGDATA="$HONCHO_HOME/pgdata"
-    mkdir -p "$PGDATA"
-    if [ -z "$(ls -A "$PGDATA")" ]; then
-        initdb -D "$PGDATA"
+    echo "[run] Starting Postgres on 127.0.0.1:5433..."
+    pg_ctl -D "$pgdata" -o "-p 5433 -k /tmp" -w start -l "$HONCHO_HOME/logs/postgres.log"
+    # Ensure pgvector extension
+    psql -p 5433 -U postgres -d postgres -c "CREATE EXTENSION IF NOT EXISTS vector;" 2>&1 | tee -a "$HONCHO_HOME/logs/psql.log"
+}
+
+stop_postgres() {
+    if pg_ctl -D "$HONCHO_HOME/pgdata" status >/dev/null 2>&1; then
+        pg_ctl -D "$HONCHO_HOME/pgdata" -w stop
     fi
-    pg_ctl -D "$PGDATA" -o "-p 5433" -w start
-    psql -p 5433 -c "CREATE EXTENSION IF NOT EXISTS vector;" || true
-    REDIS_CONF="$HONCHO_HOME/redis.conf"
-    echo "save 900 1" > "$REDIS_CONF"
-    redis-server "$REDIS_CONF" --port 6380 &
-    export DB_CONNECTION_URI="postgresql+psycopg://postgres:postgres@127.0.0.1:5433/postgres"
-    export CACHE_URL="redis://127.0.0.1:6380/0"
-else
-    export DB_CONNECTION_URI="$DB_URL"
-    export CACHE_URL="$REDIS_URL"
-fi
-# Start FastAPI app via uvicorn
-exec uvicorn src.main:app --host 0.0.0.0 --port "$API_PORT"
+}
+
+# Redis (embedded mode)
+start_redis() {
+    local redis_dir="$HONCHO_HOME/redis"
+    local redis_conf="$redis_dir/redis.conf"
+    if [ ! -f "$redis_conf" ]; then
+        cat > "$redis_conf" << REDIS_EOF
+port 6380
+daemonize no
+dir $redis_dir
+appendonly yes
+appendfsync everysec
+save 900 1
+save 300 10
+save 60 10000
+bind 127.0.0.1
+REDIS_EOF
+    fi
+    echo "[run] Starting Redis on 127.0.0.1:6380..."
+    redis-server "$redis_conf" > "$HONCHO_HOME/logs/redis.log" 2>&1 &
+}
+
+# Clone / update Honcho source
+sync_source() {
+    local src="$HONCHO_HOME/source"
+    if [ ! -d "$src/.git" ]; then
+        echo "[run] Cloning Honcho from $GIT_URL..."
+        if [ -n "$GIT_TOKEN" ]; then
+            local auth_url
+            auth_url=$(echo "$GIT_URL" | sed "s|://|://oauth2:${GIT_TOKEN}@|")
+            git clone --depth 1 "$auth_url" "$src"
+        else
+            git clone --depth 1 "$GIT_URL" "$src"
+        fi
+        cd "$src"
+        if [ -n "$GIT_REF" ]; then
+            echo "[run] Checking out ref: $GIT_REF"
+            git fetch --depth 1 origin "$GIT_REF"
+            git checkout "$GIT_REF"
+        fi
+    else
+        cd "$src"
+        if [ "$AUTO_UPDATE" = "true" ]; then
+            echo "[run] Auto-updating Honcho source..."
+            git stash 2>/dev/null || true
+            git pull --ff-only 2>&1 || echo "[run] WARNING: git pull failed (local changes?)"
+            git stash pop 2>/dev/null || true
+        fi
+        if [ -n "$GIT_REF" ]; then
+            git checkout "$GIT_REF" 2>/dev/null || true
+        fi
+    fi
+}
+
+# Marker-gated install
+ensure_installed() {
+    local src="$HONCHO_HOME/source"
+    local marker="$HONCHO_HOME/.install-marker"
+    local current_head
+    current_head=$(cd "$src" && git rev-parse HEAD 2>/dev/null || echo "unknown")
+    local current_url="${GIT_URL}"
+    local current_ref="${GIT_REF:-main}"
+    local marker_value="${current_url}|${current_ref}|${current_head}"
+
+    if [ -f "$marker" ] && [ "$(cat "$marker")" = "$marker_value" ]; then
+        echo "[run] Marker unchanged — skipping pip install"
+        return 0
+    fi
+
+    echo "[run] Marker changed — installing dependencies..."
+    cd "$src"
+
+    if [ ! -d "$HONCHO_HOME/venv/bin" ]; then
+        python3 -m venv "$HONCHO_HOME/venv"
+    fi
+    source "$HONCHO_HOME/venv/bin/activate"
+
+    uv pip install -e ".[dev]" 2>&1 | tee "$HONCHO_HOME/logs/install.log" || {
+        echo "[run] ERROR: pip install failed — see $HONCHO_HOME/logs/install.log"
+        return 1
+    }
+
+    # Alembic migrations
+    if [ -f alembic.ini ]; then
+        echo "[run] Running Alembic migrations..."
+        uv run alembic upgrade head 2>&1 | tee "$HONCHO_HOME/logs/migrate.log" || true
+    fi
+
+    echo "$marker_value" > "$marker"
+}
+
+# Render config.toml
+render_config() {
+    local cfg="$HONCHO_HOME/config.toml"
+    if [ -f "$cfg" ]; then
+        return 0
+    fi
+
+    echo "[run] Writing $cfg..."
+    cat > "$cfg" << CONFIG_EOF
+[database]
+connection_uri = "${DB_CONNECTION_URI}"
+
+[auth]
+use_auth = ${USE_AUTH:-false}
+jwt_secret = "${JWT_SECRET:-change-me-in-production}"
+
+[llm]
+default_max_tokens = ${DEFAULT_MAX_TOKENS:-4096}
+
+[embedding]
+vector_dimensions = ${VECTOR_DIMENSIONS:-1536}
+
+[deriver]
+enabled = ${DERIVER_ENABLED:-false}
+workers = ${DERIVER_WORKERS:-2}
+polling_sleep_interval_seconds = ${POLL_INTERVAL:-30}
+CONFIG_EOF
+}
+
+# Start nginx (ingress proxy)
+start_nginx() {
+    echo "[run] Starting nginx..."
+
+    # Apply basic auth if password set
+    if [ -n "$ACCESS_PASSWORD" ]; then
+        echo "[run] Enabling basic auth..."
+        local htpasswd_file="$HONCHO_HOME/.htpasswd"
+        echo "honcho:$(openssl passwd -apr1 <<<"$ACCESS_PASSWORD")" > "$htpasswd_file"
+    fi
+
+    # Write nginx config from template
+    local nginx_conf="/etc/nginx/nginx.conf"
+    cat > "$nginx_conf" << NGINX_EOF
+worker_processes auto;
+pid /run/nginx.pid;
+events {
+    worker_connections 768;
+}
+http {
+    include /etc/nginx/mime.types;
+    default_type application/octet-stream;
+    access_log /var/log/nginx/access.log;
+    error_log /var/log/nginx/error.log;
+
+    # HA ingress proxy
+    server {
+        listen 49170 default_server;
+        add_header X-Frame-Options SAMEORIGIN always;
+        add_header Content-Security-Policy "frame-ancestors 'self'" always;
+        location / {
+            proxy_pass http://127.0.0.1:${API_PORT};
+            proxy_set_header Host \$host;
+            proxy_set_header X-Real-IP \$remote_addr;
+            proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto \$scheme;
+            proxy_http_version 1.1;
+            proxy_set_header Upgrade \$http_upgrade;
+            proxy_set_header Connection "upgrade";
+        }
+    }
+}
+NGINX_EOF
+
+    # Apply basic auth if configured
+    if [ -n "$ACCESS_PASSWORD" ]; then
+        local htpasswd_file="$HONCHO_HOME/.htpasswd"
+        # Insert basic auth into the location block
+        sed -i 's|proxy_pass http://127.0.0.1:'"${API_PORT}"';|auth_basic "Honcho";\n            auth_basic_user_file '"${htpasswd_file}"';\n            proxy_pass http://127.0.0.1:'"${API_PORT}"';|' "$nginx_conf"
+    fi
+
+    nginx -t 2>&1 || { echo "[run] nginx config test FAILED"; cat "$nginx_conf"; exit 1; }
+    nginx
+}
+
+# Environment variables passthrough
+load_env_vars() {
+    # Read from HA options
+    eval "$(jq -r '.env_vars // [] | .[] | "export \(.name)=\(.value|@sh)"' "$OPTIONS_FILE")"
+    # Also source .env file if present
+    local env_file="$HONCHO_HOME/.env"
+    if [ -f "$env_file" ]; then
+        set -a
+        source "$env_file"
+        set +a
+    fi
+}
+
+# ===== MAIN =====
+echo "[run] Honcho add-on starting"
+echo "[run] DB mode: $DB_MODE | Redis mode: $REDIS_MODE | API port: $API_PORT"
+
+# 1. Database and cache
+case "$DB_MODE" in
+    embedded)
+        start_postgres
+        export DB_CONNECTION_URI="postgresql+psycopg://postgres@127.0.0.1:5433/postgres"
+        ;;
+    external)
+        export DB_CONNECTION_URI="$DB_URL"
+        ;;
+esac
+
+case "$REDIS_MODE" in
+    embedded)
+        start_redis
+        export CACHE_URL="redis://127.0.0.1:6380/0"
+        ;;
+    external)
+        export CACHE_URL="$REDIS_URL"
+        ;;
+esac
+
+# 2. Load environment variables
+load_env_vars
+
+# 3. Sync, install, migrate
+sync_source
+ensure_installed
+
+# 4. Render config
+render_config
+
+# 5. Start nginx
+start_nginx
+
+# 6. Start Honcho API
+echo "[run] Starting Honcho FastAPI on 0.0.0.0:${API_PORT}..."
+
+cd "$HONCHO_HOME/source"
+source "$HONCHO_HOME/venv/bin/activate"
+
+exec uvicorn src.main:app \
+    --host 0.0.0.0 \
+    --port "$API_PORT" \
+    --log-level info \
+    --proxy-headers \
+    --forwarded-allow-ips "*"

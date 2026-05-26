@@ -17,6 +17,4 @@ All notable changes to this project will be documented here. This project adhere
 - Dependabot config for the HA base image.
 
 ### Known issues
-- `.github/dependabot.yml` is a placeholder — needs the proper v2 schema before merging substantive changes.
-- `run.sh` does not yet implement nginx basic-auth when `access_password` is set.
 - No CI step builds the Docker image — the add-on must be tested manually in Home Assistant for now.

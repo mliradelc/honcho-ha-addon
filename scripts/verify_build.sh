@@ -18,7 +18,7 @@ if [ -z "${GITHUB_TOKEN:-}" ] && [ -f /config/.hermes/.env ]; then
 fi
 
 echo "=== P1: secret-redactor artefacts ==="
-hits=$(grep -rn '\*\*\*' . --include='*.sh' --include='*.yaml' --include='*.tpl' --include='*.json' 2>/dev/null || true)
+hits=$(grep -rn '\*\*\*' . --include='*.sh' --include='*.yaml' --include='*.tpl' --include='*.json' --exclude='verify_build.sh' 2>/dev/null || true)
 if [ -n "$hits" ]; then
   bad "redaction artefacts found:"
   printf '%s\n' "$hits"

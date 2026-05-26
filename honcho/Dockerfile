@@ -1,7 +1,13 @@
-ARG BUILD_FROM
+ARG BUILD_FROM=ghcr.io/home-assistant/amd64-base-debian:bookworm
 FROM ${BUILD_FROM}
 
-# System packages: Python, Postgres 15 + pgvector, Redis, nginx, and build essentials
+# Required HA labels
+LABEL \
+    io.hass.version="3.0.7" \
+    io.hass.type="addon" \
+    io.hass.arch="amd64|aarch64"
+
+# System deps: Python, Postgres 15 + pgvector, Redis, nginx
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates curl jq git \
     python3 python3-venv python3-pip build-essential libffi-dev \

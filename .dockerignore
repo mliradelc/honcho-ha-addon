@@ -1,0 +1,12 @@
+# Home Assistant Add-on repository
+.DS_Store
+*.swp
+*.log
+.env
+__pycache__/
+*.py[cod]
+.venv/
+node_modules/
+dist/
+build/
+*.tmp

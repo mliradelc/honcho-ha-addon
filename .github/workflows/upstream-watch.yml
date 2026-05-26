@@ -9,34 +9,24 @@ jobs:
   check-updates:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-      - name: Install jq and curl
-        run: sudo apt-get update && sudo apt-get install -y jq curl
-      - name: Fetch latest Postgres version (15) - placeholder
-        run: echo "Postgres version is fixed at 15"
+      - uses: actions/checkout@v4
       - name: Fetch latest Redis version
         id: redis
         run: |
-          LATEST=$(curl -s https://api.github.com/repos/redis/redis/releases | jq -r '[.[] | select(.prerelease==false)][0].tag_name')
-          echo "::set-output name=version::$LATEST"
+          LATEST=$(curl -s https://api.github.com/repos/redis/redis/releases \
+            | jq -r '[.[] | select(.prerelease==false)][0].tag_name')
+          echo "version=$LATEST" >> $GITHUB_OUTPUT
       - name: Fetch latest pgvector version
         id: pgvector
         run: |
-          LATEST=$(curl -s https://api.github.com/repos/pgvector/pgvector/releases | jq -r '[.[] | select(.prerelease==false)][0].tag_name')
-          echo "::set-output name=version::$LATEST"
+          LATEST=$(curl -s https://api.github.com/repos/pgvector/pgvector/releases \
+            | jq -r '[.[] | select(.prerelease==false)][0].tag_name')
+          echo "version=$LATEST" >> $GITHUB_OUTPUT
       - name: Compare with recorded versions
-        id: compare
         run: |
           cat honcho/.upstream-versions.json
-          # Here you would compare and decide if bump needed
-          echo "No bump logic implemented in this placeholder"
+          echo "Redis latest: ${{ steps.redis.outputs.version }}"
+          echo "pgvector latest: ${{ steps.pgvector.outputs.version }}"
       - name: Create PR if versions differ
         if: false
-        run: echo "Create PR step (not implemented)"
+        run: echo "PR automation not yet implemented"

@@ -62,13 +62,15 @@ Virtualenv in     /config/honcho/source/.venv (uv-managed).
 
 ## Releases & security updates
 
-System dependencies (Postgres, Redis, pgvector, base image) are tracked by two GitHub Actions:
+Docker images are built automatically on GitHub Actions and pushed to **GitHub Container Registry** (`ghcr.io/mliradelc/honcho-ha-addon`). The add-on pulls pre-built images rather than building locally — faster installs and no Docker-in-Docker build issues.
 
-- **`upstream-watch.yml`** — weekly check for new stable releases of Postgres, Redis and pgvector. Opens a PR bumping `honcho/config.yaml` version when drift is detected.
-- **`release.yml`** — cuts a GitHub release whenever `honcho/config.yaml`'s `version:` field changes on `main`.
+System dependencies (Postgres, Redis, pgvector, base image) are tracked by:
+
+- **`upstream-watch.yml`** — weekly check for new stable releases of Redis and pgvector.
+- **`release.yml`** — on every GitHub Release, builds multi-arch (`amd64`, `aarch64`) images and pushes to GHCR with both versioned and `latest` tags.
 - **Dependabot** tracks the HA base image for OS CVEs independently.
 
-Push the version bump → HA supervisor picks it up on next check → users get the rebuild prompt.
+To trigger a new build: create a GitHub Release with a tag matching the `version:` field in `honcho/config.yaml`. The Supervisor checks for new image tags automatically.
 
 ## Hermes integration
 

@@ -24,8 +24,7 @@ jobs:
       matrix:
         arch: [amd64, aarch64]
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -67,10 +66,9 @@ jobs:
           tags: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}-${{ matrix.arch }}
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ matrix.arch }}
-          labels: |
-            io.hass.version=${{ steps.version.outputs.version }}
-            io.hass.type=addon
-            io.hass.arch=${{ matrix.arch }}
+          # Push single-arch images, not manifest lists
+          provenance: false
+          sbom: false
 
   create-manifest:
     needs: build-and-push
@@ -91,18 +89,48 @@ jobs:
           VERSION: ${{ github.event.release.tag_name || inputs.version }}
         run: |
           VERSION="${VERSION#v}"
-          # Create versioned manifest
+
+          # Inspect each per-arch image to get the actual digest
+          AMD64_DIGEST=$(docker buildx imagetools inspect \
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$VERSION-amd64 \
+            --format '{{json .}}' 2>/dev/null | python3 -c "
+          import json,sys
+          d = json.load(sys.stdin)
+          if 'manifests' in d:
+              for m in d['manifests']:
+                  if m['platform']['architecture'] == 'amd64':
+                      print(m['digest'])
+                      sys.exit(0)
+          print(d.get('mediaType','unknown'))
+          ")
+
+          AARCH64_DIGEST=$(docker buildx imagetools inspect \
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$VERSION-aarch64 \
+            --format '{{json .}}' 2>/dev/null | python3 -c "
+          import json,sys
+          d = json.load(sys.stdin)
+          if 'manifests' in d:
+              for m in d['manifests']:
+                  if m['platform']['architecture'] == 'arm64':
+                      print(m['digest'])
+                      sys.exit(0)
+          print(d.get('mediaType','unknown'))
+          ")
+
+          echo "AMD64 digest: $AMD64_DIGEST"
+          echo "AARCH64 digest: $AARCH64_DIGEST"
+
+          # Create manifests from digests to avoid manifest-list-of-manifest-lists issue
           docker manifest create \
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$VERSION \
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$VERSION-amd64 \
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$VERSION-aarch64
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@$AMD64_DIGEST \
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@$AARCH64_DIGEST
           docker manifest push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$VERSION
 
-          # Create latest manifest
           docker manifest create \
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest \
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:amd64 \
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:aarch64
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@$AMD64_DIGEST \
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@$AARCH64_DIGEST
           docker manifest push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
 
-          echo "Pushed manifest: $VERSION and latest"
+          echo "Pushed multi-arch manifest: $VERSION and latest"

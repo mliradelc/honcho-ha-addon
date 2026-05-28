@@ -14,6 +14,19 @@ All notable changes to this project will be documented here. This project adhere
 ### Fixed
 - `config.yaml` schema: replaced invalid `enum?` type with `str?` (HA Supervisor does not support enum schema types).
 
+## [3.0.12] - 2026-05-28
+
+### Added
+- `honcho/DOCS.md` — full long description, configuration table, and first-start
+  guide shown in the HA add-on store.
+- `honcho/CHANGELOG.md` — changelog now located inside the add-on directory so
+  HA Supervisor can display release notes in the UI.
+
+### Fixed
+- `url` in `config.yaml` now points to the add-on repository instead of the
+  upstream Honcho project.
+- Improved one-line `description` in `config.yaml` for the add-on store card.
+
 ## [3.0.11] - 2026-05-28
 
 ### Fixed

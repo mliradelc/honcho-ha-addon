@@ -3,7 +3,7 @@ FROM ${BUILD_FROM}
 
 # Required HA labels
 LABEL \
-    io.hass.version="3.0.7" \
+    io.hass.version="3.0.8" \
     io.hass.type="addon" \
     io.hass.arch="amd64|aarch64"
 
@@ -34,5 +34,6 @@ RUN chmod +x /run.sh
 RUN mkdir -p /var/www /var/log/nginx /run/nginx /config/honcho
 
 ENV LANG=C.UTF-8
+ENV PATH="/usr/lib/postgresql/15/bin:${PATH}"
 
 CMD ["/run.sh"]

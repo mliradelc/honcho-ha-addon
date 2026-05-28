@@ -90,47 +90,39 @@ jobs:
         run: |
           VERSION="${VERSION#v}"
 
-          # Inspect each per-arch image to get the actual digest
+          # Each per-arch image is a single OCI manifest (provenance=false), so
+          # use --format '{{.Manifest.Digest}}' which works for both single manifests
+          # and manifest lists — unlike '{{json .}}.manifests[].digest' which only
+          # works for manifest lists.
           AMD64_DIGEST=$(docker buildx imagetools inspect \
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$VERSION-amd64 \
-            --format '{{json .}}' 2>/dev/null | python3 -c "
-          import json,sys
-          d = json.load(sys.stdin)
-          if 'manifests' in d:
-              for m in d['manifests']:
-                  if m['platform']['architecture'] == 'amd64':
-                      print(m['digest'])
-                      sys.exit(0)
-          print(d.get('mediaType','unknown'))
-          ")
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${VERSION}-amd64 \
+            --format '{{.Manifest.Digest}}')
 
           AARCH64_DIGEST=$(docker buildx imagetools inspect \
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$VERSION-aarch64 \
-            --format '{{json .}}' 2>/dev/null | python3 -c "
-          import json,sys
-          d = json.load(sys.stdin)
-          if 'manifests' in d:
-              for m in d['manifests']:
-                  if m['platform']['architecture'] == 'arm64':
-                      print(m['digest'])
-                      sys.exit(0)
-          print(d.get('mediaType','unknown'))
-          ")
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${VERSION}-aarch64 \
+            --format '{{.Manifest.Digest}}')
 
-          echo "AMD64 digest: $AMD64_DIGEST"
+          echo "AMD64 digest:   $AMD64_DIGEST"
           echo "AARCH64 digest: $AARCH64_DIGEST"
 
-          # Create manifests from digests to avoid manifest-list-of-manifest-lists issue
-          docker manifest create \
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$VERSION \
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@$AMD64_DIGEST \
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@$AARCH64_DIGEST
-          docker manifest push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$VERSION
+          # Validate digests look correct before using them
+          if [[ "$AMD64_DIGEST" != sha256:* ]] || [[ "$AARCH64_DIGEST" != sha256:* ]]; then
+            echo "ERROR: Unexpected digest format — aborting manifest creation"
+            exit 1
+          fi
 
+          # Create and push versioned multi-arch manifest
+          docker manifest create \
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${VERSION} \
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${AMD64_DIGEST} \
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${AARCH64_DIGEST}
+          docker manifest push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${VERSION}
+
+          # Create and push latest multi-arch manifest
           docker manifest create \
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest \
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@$AMD64_DIGEST \
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@$AARCH64_DIGEST
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${AMD64_DIGEST} \
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${AARCH64_DIGEST}
           docker manifest push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
 
-          echo "Pushed multi-arch manifest: $VERSION and latest"
+          echo "Pushed multi-arch manifest: ${VERSION} and latest"

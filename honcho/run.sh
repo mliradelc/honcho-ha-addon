@@ -54,7 +54,7 @@ start_postgres() {
     # Stream postgres log to stdout so entries appear in HA log viewer
     tail -F "$HONCHO_HOME/logs/postgres.log" &
     # Ensure pgvector extension
-    su -s /bin/bash postgres -c         "psql -p 5433 -U postgres -d postgres -c \"CREATE EXTENSION IF NOT EXISTS vector;\""         2>&1 | tee -a "$HONCHO_HOME/logs/psql.log"
+    su -s /bin/bash postgres -c         "psql -h 127.0.0.1 -p 5433 -U postgres -d postgres -c \"CREATE EXTENSION IF NOT EXISTS vector;\""         2>&1 | tee -a "$HONCHO_HOME/logs/psql.log"
 }
 
 stop_postgres() {

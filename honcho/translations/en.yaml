@@ -93,6 +93,12 @@ configuration:
     description: >-
       API key for the embeddings endpoint.
       Leave empty to reuse llm_api_key.
+  openconcho_enabled:
+    name: Enable OpenConcho web UI
+    description: >-
+      When enabled, the HA ingress serves the OpenConcho dashboard at /
+      and proxies /api/ to the Honcho API — no CORS configuration needed.
+      Disable if you prefer to access the Honcho API directly.
   env_vars:
     name: Extra environment variables
     description: >-

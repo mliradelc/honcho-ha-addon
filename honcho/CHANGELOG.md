@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented here. This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.17] - 2026-05-28
+
+### Added
+- **OpenConcho web UI** bundled in the Docker image.
+  - Multi-stage Dockerfile: Node 22 + pnpm builds the OpenConcho SPA (pinned to
+    v0.12.1), final image copies `packages/web/dist/` to `/var/www/openconcho`.
+  - nginx serves OpenConcho at `/` and reverse-proxies `/api/` to the Honcho
+    FastAPI — same-origin, no CORS configuration needed.
+  - New `openconcho_enabled` option (default: `true`) — disable to expose the
+    raw Honcho API directly.
+  - OpenConcho connects to Honcho at the `/api/` path automatically when served
+    from the add-on ingress.
+
 ## [3.0.16] - 2026-05-28
 
 ### Fixed

@@ -1,9 +1,26 @@
+# --- Stage 1: Build OpenConcho web SPA ---
+# Pinned to latest stable tag. Update OPENCONCHO_VERSION to upgrade.
+FROM node:22-alpine AS openconcho-builder
+
+ARG OPENCONCHO_VERSION=v0.12.1
+
+RUN corepack enable \
+ && corepack prepare pnpm@10.33.2 --activate
+
+WORKDIR /openconcho
+RUN apk add --no-cache git \
+ && git clone --depth 1 --branch ${OPENCONCHO_VERSION} \
+        https://github.com/offendingcommit/openconcho.git . \
+ && pnpm install --frozen-lockfile --filter @openconcho/web... \
+ && pnpm --filter @openconcho/web build
+
+# --- Stage 2: Honcho HA add-on runtime ---
 ARG BUILD_FROM=ghcr.io/home-assistant/amd64-base-debian:bookworm
 FROM ${BUILD_FROM}
 
 # Required HA labels
 LABEL \
-    io.hass.version="3.0.8" \
+    io.hass.version="3.0.17" \
     io.hass.type="addon" \
     io.hass.arch="amd64|aarch64"
 
@@ -24,6 +41,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Python uv (fast package installer)
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 ENV UV_LINK_MODE=copy
+
+# OpenConcho web SPA — served by nginx at /
+COPY --from=openconcho-builder /openconcho/packages/web/dist /var/www/openconcho
 
 # Copy add-on runtime files
 COPY run.sh /

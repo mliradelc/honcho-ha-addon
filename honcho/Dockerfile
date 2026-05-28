@@ -1,3 +1,6 @@
+# BUILD_FROM must be declared globally (before any FROM) so Docker passes it to stage 2
+ARG BUILD_FROM=ghcr.io/home-assistant/amd64-base-debian:bookworm
+
 # --- Stage 1: Build OpenConcho web SPA ---
 # Pinned to latest stable tag. Update OPENCONCHO_VERSION to upgrade.
 FROM node:22-alpine AS openconcho-builder
@@ -15,7 +18,6 @@ RUN apk add --no-cache git \
  && pnpm --filter @openconcho/web build
 
 # --- Stage 2: Honcho HA add-on runtime ---
-ARG BUILD_FROM=ghcr.io/home-assistant/amd64-base-debian:bookworm
 FROM ${BUILD_FROM}
 
 # Required HA labels
@@ -47,8 +49,6 @@ COPY --from=openconcho-builder /openconcho/packages/web/dist /var/www/openconcho
 
 # Copy add-on runtime files
 COPY run.sh /
-COPY nginx.conf.tpl /etc/nginx/nginx.conf.tpl
-COPY landing.html.tpl /var/www/landing.html.tpl
 RUN chmod +x /run.sh
 
 RUN mkdir -p /var/www /var/log/nginx /run/nginx /config/honcho

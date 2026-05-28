@@ -14,6 +14,14 @@ All notable changes to this project will be documented here. This project adhere
 ### Fixed
 - `config.yaml` schema: replaced invalid `enum?` type with `str?` (HA Supervisor does not support enum schema types).
 
+## [3.0.13] - 2026-05-28
+
+### Fixed
+- Add `-h 127.0.0.1` to the `psql` call so it connects via TCP rather than
+  the Unix socket. pg_ctl was started with `-k /tmp` (socket in /tmp) but psql
+  defaults to `/var/run/postgresql/` — causing an immediate connection failure
+  after Postgres started successfully.
+
 ## [3.0.12] - 2026-05-28
 
 ### Added

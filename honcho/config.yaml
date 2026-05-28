@@ -1,5 +1,5 @@
 name: Honcho
-version: "3.0.16"
+version: "3.0.17"
 slug: honcho
 description: "Open-source memory & user-state backend for AI agents. Embeds Postgres+pgvector and Redis — zero external dependencies."
 url: "https://github.com/mliradelc/honcho-ha-addon"
@@ -41,6 +41,8 @@ options:
   embedding_model: ""
   embedding_base_url: ""
   embedding_api_key: ""
+  # OpenConcho web UI (served at the HA ingress alongside the Honcho API)
+  openconcho_enabled: true
   env_vars: []
 schema:
   git_url: "url?"
@@ -61,6 +63,7 @@ schema:
   embedding_model: "str?"
   embedding_base_url: "str?"
   embedding_api_key: "password?"
+  openconcho_enabled: "bool"
   env_vars:
     - name: "match(^[A-Z_][A-Z0-9_]{0,254}$)"
       value: "str"

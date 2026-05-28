@@ -14,6 +14,15 @@ All notable changes to this project will be documented here. This project adhere
 ### Fixed
 - `config.yaml` schema: replaced invalid `enum?` type with `str?` (HA Supervisor does not support enum schema types).
 
+## [3.0.11] - 2026-05-28
+
+### Fixed
+- `chown postgres` the logs directory and pre-create `postgres.log` owned by
+  postgres before calling `pg_ctl start`, resolving `Permission denied` that
+  prevented Postgres from starting in 3.0.10.
+- Tail `postgres.log` to stdout so Postgres output appears in the HA add-on
+  log viewer alongside the rest of the add-on output.
+
 ## [3.0.10] - 2026-05-28
 
 ### Fixed

@@ -1,12 +1,12 @@
 name: Validate add-on image
 
 on:
-  push:
+  # Trigger after the build workflow completes successfully on main
+  workflow_run:
+    workflows: ["Build and publish add-on image"]
+    types: [completed]
     branches: [main]
-    paths:
-      - 'honcho/Dockerfile'
-      - 'honcho/run.sh'
-      - 'honcho/config.yaml'
+  # Also allow manual runs and PR static checks (no Docker pull)
   pull_request:
     paths:
       - 'honcho/Dockerfile'
@@ -22,6 +22,8 @@ jobs:
   validate:
     name: Smoke-test add-on image
     runs-on: ubuntu-latest
+    # When triggered by workflow_run, only run if the build succeeded
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
     permissions:
       packages: read
 

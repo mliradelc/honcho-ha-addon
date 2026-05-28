@@ -14,6 +14,19 @@ All notable changes to this project will be documented here. This project adhere
 ### Fixed
 - `config.yaml` schema: replaced invalid `enum?` type with `str?` (HA Supervisor does not support enum schema types).
 
+## [3.0.15] - 2026-05-28
+
+### Changed
+- Default LLM changed to **mistral-small-4-119b-2603** on KI-Connect
+  (`https://chat.kiconnect.nrw/api/v1`) — fully European infrastructure,
+  institutional key, no external dependency.
+- Default embedding changed to **e5-mistral-7b-instruct** on KI-Connect —
+  pairs natively with Mistral LLMs for best RAG/retrieval quality (4096-dim).
+
+### Added
+- Full parameter descriptions in `translations/en.yaml` — every configuration
+  option now shows a human-readable name and description in the HA add-on UI.
+
 ## [3.0.14] - 2026-05-28
 
 ### Added

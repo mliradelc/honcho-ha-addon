@@ -28,6 +28,8 @@ HONCHO_HOME="/config/honcho"
 mkdir -p "$HONCHO_HOME"/{source,venv,pgdata,redis,logs}
 # postgres user must own pgdata — HA containers run as root
 chown postgres "$HONCHO_HOME/pgdata"
+# postgres user must also own the logs dir to write postgres.log
+chown postgres "$HONCHO_HOME/logs"
 
 # Timezone (from HA env TZ)
 if [ -n "${TZ:-}" ] && [ -f "/usr/share/zoneinfo/$TZ" ]; then
@@ -45,7 +47,12 @@ start_postgres() {
         su -s /bin/bash postgres -c             "initdb -D \"$pgdata\" --username=postgres --auth=trust"             2>&1 | tee -a "$HONCHO_HOME/logs/initdb.log"
     fi
     echo "[run] Starting Postgres on 127.0.0.1:5433..."
+    # Pre-create log file owned by postgres so pg_ctl can open it
+    touch "$HONCHO_HOME/logs/postgres.log"
+    chown postgres "$HONCHO_HOME/logs/postgres.log"
     su -s /bin/bash postgres -c         "pg_ctl -D \"$pgdata\" -o \"-p 5433 -k /tmp\" -w start -l \"$HONCHO_HOME/logs/postgres.log\""
+    # Stream postgres log to stdout so entries appear in HA log viewer
+    tail -F "$HONCHO_HOME/logs/postgres.log" &
     # Ensure pgvector extension
     su -s /bin/bash postgres -c         "psql -p 5433 -U postgres -d postgres -c \"CREATE EXTENSION IF NOT EXISTS vector;\""         2>&1 | tee -a "$HONCHO_HOME/logs/psql.log"
 }

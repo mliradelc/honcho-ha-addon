@@ -14,6 +14,19 @@ All notable changes to this project will be documented here. This project adhere
 ### Fixed
 - `config.yaml` schema: replaced invalid `enum?` type with `str?` (HA Supervisor does not support enum schema types).
 
+## [3.0.14] - 2026-05-28
+
+### Added
+- LLM and embedding configuration options in the HA add-on UI:
+  `llm_transport`, `llm_model`, `llm_base_url`, `llm_api_key`,
+  `embedding_transport`, `embedding_model`, `embedding_base_url`,
+  `embedding_api_key`. Defaults are pre-configured to point at Hermes Agent
+  (`https://hermes.liradelcanto.com/v1`).
+- `apply_llm_config()` in `run.sh` — writes the configured values into
+  Honcho's `.env` before startup, mapping to `LLM_OPENAI_BASE_URL`,
+  `LLM_OPENAI_API_KEY`, `LLM_DEFAULT_MODEL`, and their embedding equivalents.
+- Updated `DOCS.md` with full LLM/Deriver configuration guide.
+
 ## [3.0.13] - 2026-05-28
 
 ### Fixed

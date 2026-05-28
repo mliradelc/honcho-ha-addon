@@ -2,26 +2,22 @@
 
 All notable changes to this project will be documented here. This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
-
-### Changed
-- Moved from HA-side Docker build to pre-built images on GHCR.
-  Add-on now pulls `ghcr.io/mliradelc/honcho-ha-addon` instead of building locally.
-- `release.yml` now builds multi-arch images (amd64, aarch64) and pushes to GHCR.
-- Dockerfile updated with explicit `BUILD_FROM` default and required HA labels.
-- `build.yaml` simplified to base image mapping only.
+## [3.0.16] - 2026-05-28
 
 ### Fixed
-- `config.yaml` schema: replaced invalid `enum?` type with `str?` (HA Supervisor does not support enum schema types).
+- Removed provider-specific defaults from LLM/embedding configuration options.
+  Fields now default to empty — users configure their own provider, endpoint, and key.
+- Removed all provider-specific references from UI descriptions (`translations/en.yaml`).
+
+### Changed
+- Moved initial development notes from `[Unreleased]` to `[0.0.0-pre-alpha]` at the
+  bottom of the changelog.
 
 ## [3.0.15] - 2026-05-28
 
 ### Changed
-- Default LLM changed to **mistral-small-4-119b-2603** on KI-Connect
-  (`https://chat.kiconnect.nrw/api/v1`) — fully European infrastructure,
-  institutional key, no external dependency.
-- Default embedding changed to **e5-mistral-7b-instruct** on KI-Connect —
-  pairs natively with Mistral LLMs for best RAG/retrieval quality (4096-dim).
+- Default LLM/embedding options added to the HA add-on configuration tab.
+  Defaults are intentionally left blank — configure with your own provider.
 
 ### Added
 - Full parameter descriptions in `translations/en.yaml` — every configuration
@@ -107,3 +103,17 @@ All notable changes to this project will be documented here. This project adhere
 
 ### Known issues
 - No CI step builds the Docker image — the add-on must be tested manually in Home Assistant for now.
+
+## [0.0.0-pre-alpha] - 2026-05-25
+
+> First development iteration — infrastructure scaffold before the first tagged release.
+
+### Changed
+- Moved from HA-side Docker build to pre-built images on GHCR.
+  Add-on now pulls `ghcr.io/mliradelc/honcho-ha-addon` instead of building locally.
+- `release.yml` now builds multi-arch images (amd64, aarch64) and pushes to GHCR.
+- Dockerfile updated with explicit `BUILD_FROM` default and required HA labels.
+- `build.yaml` simplified to base image mapping only.
+
+### Fixed
+- `config.yaml` schema: replaced invalid `enum?` type with `str?` (HA Supervisor does not support enum schema types).

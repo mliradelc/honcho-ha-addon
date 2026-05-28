@@ -14,6 +14,12 @@ All notable changes to this project will be documented here. This project adhere
 ### Fixed
 - `config.yaml` schema: replaced invalid `enum?` type with `str?` (HA Supervisor does not support enum schema types).
 
+## [3.0.9] - 2026-05-28
+
+### Fixed
+- Add PostgreSQL 15 bin dir to PATH in Dockerfile (/usr/lib/postgresql/15/bin)
+  so that initdb, pg_ctl and psql resolve correctly at runtime (boot-loop fix).
+
 ## [3.0.8] - 2026-05-28
 
 ### Fixed

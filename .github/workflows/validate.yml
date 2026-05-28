@@ -129,7 +129,7 @@ jobs:
               set -euo pipefail
               echo "=== initdb smoke test ==="
               PGDATA=$(mktemp -d)
-              initdb -D "$PGDATA" --username=postgres --auth=trust -q
+              initdb -D "$PGDATA" --username=postgres --auth=trust 2>&1
               echo "  OK: initdb succeeded — PG_VERSION=$(cat $PGDATA/PG_VERSION)"
               rm -rf "$PGDATA"
             '

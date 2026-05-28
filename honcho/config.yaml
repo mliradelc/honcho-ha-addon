@@ -1,5 +1,5 @@
 name: Honcho
-version: "3.0.14"
+version: "3.0.15"
 slug: honcho
 description: "Open-source memory & user-state backend for AI agents. Embeds Postgres+pgvector and Redis — zero external dependencies."
 url: "https://github.com/mliradelc/honcho-ha-addon"
@@ -33,13 +33,13 @@ options:
   access_password: ""
   # LLM configuration (Deriver — memory extraction from conversations)
   llm_transport: "openai"
-  llm_model: "hermes-agent"
-  llm_base_url: "https://hermes.liradelcanto.com/v1"
+  llm_model: "mistral-small-4-119b-2603"
+  llm_base_url: "https://chat.kiconnect.nrw/api/v1"
   llm_api_key: ""
-  # Embedding configuration
+  # Embedding configuration (e5-mistral pairs with Mistral LLMs for best RAG quality)
   embedding_transport: "openai"
-  embedding_model: "text-embedding-3-small"
-  embedding_base_url: ""
+  embedding_model: "e5-mistral-7b-instruct"
+  embedding_base_url: "https://chat.kiconnect.nrw/api/v1"
   embedding_api_key: ""
   env_vars: []
 schema:

@@ -14,6 +14,13 @@ All notable changes to this project will be documented here. This project adhere
 ### Fixed
 - `config.yaml` schema: replaced invalid `enum?` type with `str?` (HA Supervisor does not support enum schema types).
 
+## [3.0.10] - 2026-05-28
+
+### Fixed
+- Run initdb, pg_ctl, and psql as the postgres user via `su -s /bin/bash postgres -c`
+  in run.sh. HA add-on containers run as root and PostgreSQL refuses to initialise a
+  data directory as root, causing a persistent boot loop.
+
 ## [3.0.9] - 2026-05-28
 
 ### Fixed

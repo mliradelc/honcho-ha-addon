@@ -1,5 +1,5 @@
 name: Honcho
-version: "3.0.10"
+version: "3.0.11"
 slug: honcho
 description: "Honcho memory backend add-on for Home Assistant"
 url: "https://github.com/plastic-labs/honcho"

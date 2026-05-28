@@ -38,9 +38,9 @@ schema:
   git_token: "password?"
   auto_update: "bool"
   db_mode: "str?"
-  db_url: "url?"
+  db_url: "str?"
   redis_mode: "str?"
-  redis_url: "url?"
+  redis_url: "str?"
   api_port: "int?"
   access_password: "password?"
   env_vars:

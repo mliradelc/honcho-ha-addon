@@ -29,6 +29,28 @@ This add-on packages Honcho as a one-click install for Home Assistant OS, modell
 | `access_password` | *(empty)* | Basic-auth password for the ingress |
 | `env_vars` | `[]` | Extra env vars injected into Honcho (e.g. `OPENAI_API_KEY`) |
 
+
+## LLM Configuration (Deriver)
+
+Honcho's **Deriver** automatically extracts facts and memories from conversations using an LLM. Configure it to use Hermes Agent's OpenAI-compatible API:
+
+| Option | Default | Description |
+|---|---|---|
+| `llm_transport` | `openai` | LLM transport: `openai`, `anthropic`, or `gemini` |
+| `llm_model` | `hermes-agent` | Model name passed to the LLM API |
+| `llm_base_url` | `https://hermes.liradelcanto.com/v1` | OpenAI-compatible base URL — defaults to Hermes |
+| `llm_api_key` | *(empty)* | API key / Bearer token for the LLM endpoint |
+| `embedding_transport` | `openai` | Embedding transport: `openai` or `gemini` |
+| `embedding_model` | `text-embedding-3-small` | Embedding model name |
+| `embedding_base_url` | *(empty)* | Override base URL for the embedding endpoint |
+| `embedding_api_key` | *(empty)* | API key for the embedding endpoint |
+
+### Pointing at Hermes Agent
+
+Set `llm_api_key` to your `API_SERVER_KEY` from Hermes's `.env`, and `llm_base_url` to `https://hermes.liradelcanto.com/v1`. Hermes will handle model routing and fallback transparently.
+
+> **Embeddings note:** Hermes's API server does not expose an embeddings endpoint. Leave `embedding_base_url` empty and set `embedding_api_key` to an OpenAI API key, or set `EMBED_MESSAGES=false` in `env_vars` to disable message embedding entirely.
+
 ## First start
 
 The default configuration requires no changes. On first boot the add-on will:

@@ -14,6 +14,16 @@ All notable changes to this project will be documented here. This project adhere
 ### Fixed
 - `config.yaml` schema: replaced invalid `enum?` type with `str?` (HA Supervisor does not support enum schema types).
 
+## [3.0.8] - 2026-05-28
+
+### Fixed
+- Remove /{arch} from image: field — HA Supervisor selects arch from multi-arch manifest automatically; sub-package path caused 403 on install.
+- Change db_url and redis_url schema from url? to str? — HA URL validator rejects empty strings, preventing add-on start with default config.
+- Fix multi-arch manifest CI: use --format .Manifest.Digest instead of JSON manifest-list parsing.
+
+### Changed
+- Bump actions/checkout from v4 to v6 (Node.js 24, improved credential storage).
+
 ## [3.0.7] - 2026-05-25
 
 ### Added

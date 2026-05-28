@@ -119,6 +119,26 @@ jobs:
               fi
             '
 
+      - name: Verify postgres user can write to logs directory
+        run: |
+          docker run --rm \
+            -v /tmp/honcho-test/config:/config \
+            --entrypoint bash \
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }} \
+            -c '
+              set -euo pipefail
+              echo "=== Logs directory ownership check ==="
+              HONCHO_HOME="/config/honcho"
+              mkdir -p "$HONCHO_HOME/logs"
+              chown postgres "$HONCHO_HOME"
+              chown postgres "$HONCHO_HOME/logs"
+              touch "$HONCHO_HOME/logs/postgres.log"
+              chown postgres "$HONCHO_HOME/logs/postgres.log"
+              # Verify postgres user can actually write to it
+              su -s /bin/bash postgres -c "echo test > $HONCHO_HOME/logs/postgres.log"
+              echo "  OK: postgres user can write to logs directory"
+            '
+
       - name: Verify initdb creates a cluster successfully
         run: |
           docker run --rm \

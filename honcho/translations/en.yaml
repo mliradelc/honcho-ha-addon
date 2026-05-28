@@ -21,19 +21,18 @@ configuration:
     name: Auto-update on restart
     description: >-
       When enabled, Honcho source is pulled (git pull --ff-only) on every
-      add-on restart. Disable if you want to pin a specific ref.
+      add-on restart. Disable to pin a specific ref.
   db_mode:
     name: Database mode
     description: >-
       embedded — starts a Postgres 15 + pgvector instance inside the
       container (data stored in /config/honcho/pgdata).
-      external — uses the connection string in db_url (e.g. the HA
-      Postgres add-on).
+      external — uses the connection string in db_url.
   db_url:
     name: External database URL
     description: >-
       Postgres connection string used when db_mode is external.
-      Example: postgresql+psycopg://user:pass@core-postgres/honcho
+      Example: postgresql+psycopg://user:pass@hostname/honcho
   redis_mode:
     name: Cache mode
     description: >-
@@ -43,7 +42,7 @@ configuration:
     name: External Redis URL
     description: >-
       Redis connection string used when redis_mode is external.
-      Example: redis://core-redis:6379/0
+      Example: redis://hostname:6379/0
   api_port:
     name: API port
     description: >-
@@ -52,30 +51,28 @@ configuration:
   access_password:
     name: Ingress basic-auth password
     description: >-
-      Protect the ingress with HTTP basic auth. Username is honcho.
+      Protect the ingress with HTTP basic auth (username: honcho).
       Leave empty to disable authentication.
   llm_transport:
     name: LLM transport
     description: >-
       Transport protocol for the Deriver LLM. Use openai for any
-      OpenAI-compatible endpoint (vLLM, Hermes, KI-Connect, etc.).
+      OpenAI-compatible endpoint (vLLM, self-hosted, cloud providers, etc.).
       Options: openai, anthropic, gemini.
   llm_model:
     name: LLM model name
     description: >-
       Model identifier sent to the LLM API. Must match the model name
-      returned by the provider. Example: mistral-small-4-119b-2603
+      returned by your provider's /models endpoint.
   llm_base_url:
     name: LLM base URL
     description: >-
-      Base URL of the OpenAI-compatible LLM endpoint. Omit trailing /v1
-      if the provider appends it automatically.
-      KI-Connect: https://chat.kiconnect.nrw/api/v1
+      Base URL of the OpenAI-compatible LLM endpoint.
+      Leave empty to use the transport's default endpoint.
   llm_api_key:
     name: LLM API key
     description: >-
-      Bearer token / API key for the LLM endpoint. For KI-Connect use
-      your institutional API key.
+      Bearer token or API key for the LLM endpoint.
   embedding_transport:
     name: Embedding transport
     description: >-
@@ -85,18 +82,17 @@ configuration:
     name: Embedding model name
     description: >-
       Model used to embed messages for semantic search. Must match the
-      name returned by the embeddings endpoint.
-      KI-Connect Mistral: e5-mistral-7b-instruct (4096-dim).
+      name returned by your embeddings endpoint.
   embedding_base_url:
     name: Embedding base URL
     description: >-
-      Base URL of the OpenAI-compatible embeddings endpoint.
-      Leave empty to use the same provider as llm_base_url.
+      Base URL of the embeddings endpoint.
+      Leave empty to use the same base URL as llm_base_url.
   embedding_api_key:
     name: Embedding API key
     description: >-
-      API key for the embeddings endpoint. Leave empty to reuse
-      llm_api_key.
+      API key for the embeddings endpoint.
+      Leave empty to reuse llm_api_key.
   env_vars:
     name: Extra environment variables
     description: >-

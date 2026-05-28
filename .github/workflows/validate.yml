@@ -1,0 +1,135 @@
+name: Validate add-on image
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'honcho/Dockerfile'
+      - 'honcho/run.sh'
+      - 'honcho/config.yaml'
+  pull_request:
+    paths:
+      - 'honcho/Dockerfile'
+      - 'honcho/run.sh'
+      - 'honcho/config.yaml'
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: mliradelc/honcho-ha-addon
+
+jobs:
+  validate:
+    name: Smoke-test add-on image
+    runs-on: ubuntu-latest
+    permissions:
+      packages: read
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract version
+        id: version
+        run: |
+          VERSION=$(grep '^version:' honcho/config.yaml | sed 's/version: *"\(.*\)"/\1/')
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Testing version: $VERSION"
+
+      # ── Static checks (no Docker) ──────────────────────────────────────────
+
+      - name: Validate config.yaml syntax
+        run: python3 -c "import yaml; yaml.safe_load(open('honcho/config.yaml'))"
+
+      - name: Check run.sh syntax
+        run: bash -n honcho/run.sh && echo "run.sh syntax OK"
+
+      # ── Runtime checks inside the container ───────────────────────────────
+
+      - name: Prepare fake options.json
+        run: |
+          mkdir -p /tmp/honcho-test/data /tmp/honcho-test/config/honcho
+          cat > /tmp/honcho-test/data/options.json << 'EOF'
+          {
+            "git_url": "https://github.com/plastic-labs/honcho.git",
+            "git_ref": "",
+            "git_token": "",
+            "auto_update": false,
+            "db_mode": "embedded",
+            "db_url": "",
+            "redis_mode": "embedded",
+            "redis_url": "",
+            "api_port": 8000,
+            "access_password": "",
+            "env_vars": []
+          }
+          EOF
+
+      - name: Check required binaries are on PATH
+        run: |
+          docker run --rm \
+            -v /tmp/honcho-test/data:/data:ro \
+            -v /tmp/honcho-test/config:/config \
+            --entrypoint bash \
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }} \
+            -c '
+              set -euo pipefail
+              echo "=== Binary presence check ==="
+              for cmd in initdb pg_ctl psql redis-server nginx uv git jq python3; do
+                path=$(command -v "$cmd" 2>/dev/null || true)
+                if [ -z "$path" ]; then
+                  echo "FAIL: $cmd not found on PATH"
+                  exit 1
+                fi
+                echo "  OK: $cmd -> $path"
+              done
+              echo ""
+              echo "=== Version summary ==="
+              initdb --version
+              redis-server --version | head -1
+              nginx -v 2>&1 | head -1
+              uv --version
+              python3 --version
+              git --version
+            '
+
+      - name: Check pgvector extension is installable
+        run: |
+          docker run --rm \
+            -v /tmp/honcho-test/config:/config \
+            --entrypoint bash \
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }} \
+            -c '
+              set -euo pipefail
+              echo "=== pgvector availability ==="
+              # Check the shared library and control file exist
+              PG_SHAREDIR=$(pg_config --sharedir 2>/dev/null || echo /usr/share/postgresql/15)
+              if ls ${PG_SHAREDIR}/extension/vector* >/dev/null 2>&1; then
+                echo "  OK: pgvector extension files found"
+                ls ${PG_SHAREDIR}/extension/vector*
+              else
+                echo "FAIL: pgvector extension files not found under $PG_SHAREDIR"
+                exit 1
+              fi
+            '
+
+      - name: Verify initdb creates a cluster successfully
+        run: |
+          docker run --rm \
+            -v /tmp/honcho-test/config:/config \
+            --entrypoint bash \
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }} \
+            -c '
+              set -euo pipefail
+              echo "=== initdb smoke test ==="
+              PGDATA=$(mktemp -d)
+              initdb -D "$PGDATA" --username=postgres --auth=trust -q
+              echo "  OK: initdb succeeded — PG_VERSION=$(cat $PGDATA/PG_VERSION)"
+              rm -rf "$PGDATA"
+            '

@@ -23,6 +23,16 @@ REDIS_URL=$(opt redis_url)
 API_PORT=$(opt api_port)
 ACCESS_PASSWORD=$(opt access_password)
 
+# LLM / Embedding configuration for Honcho Deriver
+LLM_TRANSPORT=$(opt llm_transport)
+LLM_MODEL=$(opt llm_model)
+LLM_BASE_URL=$(opt llm_base_url)
+LLM_API_KEY=$(opt llm_api_key)
+EMBEDDING_TRANSPORT=$(opt embedding_transport)
+EMBEDDING_MODEL=$(opt embedding_model)
+EMBEDDING_BASE_URL=$(opt embedding_base_url)
+EMBEDDING_API_KEY=$(opt embedding_api_key)
+
 # Persistent storage
 HONCHO_HOME="/config/honcho"
 mkdir -p "$HONCHO_HOME"/{source,venv,pgdata,redis,logs}
@@ -277,6 +287,26 @@ esac
 
 # 2. Load environment variables
 load_env_vars
+
+# 2b. Apply LLM/embedding config from HA options → Honcho env vars
+# Honcho Deriver reads these to know which LLM to call for memory extraction
+apply_llm_config() {
+    local env_file="$HONCHO_HOME/.env"
+    # Remove stale LLM lines then re-write
+    sed -i '/^LLM_\|^EMBEDDING_\|^OPENAI_\|^ANTHROPIC_/d' "$env_file" 2>/dev/null || true
+    {
+        [ -n "${LLM_TRANSPORT:-}" ]        && echo "LLM_DEFAULT_TRANSPORT=$LLM_TRANSPORT"
+        [ -n "${LLM_MODEL:-}" ]            && echo "LLM_DEFAULT_MODEL=$LLM_MODEL"
+        [ -n "${LLM_BASE_URL:-}" ]         && echo "LLM_OPENAI_BASE_URL=$LLM_BASE_URL"
+        [ -n "${LLM_API_KEY:-}" ]          && echo "LLM_OPENAI_API_KEY=$LLM_API_KEY"
+        [ -n "${EMBEDDING_TRANSPORT:-}" ]  && echo "EMBEDDING_DEFAULT_TRANSPORT=$EMBEDDING_TRANSPORT"
+        [ -n "${EMBEDDING_MODEL:-}" ]      && echo "EMBEDDING_DEFAULT_MODEL=$EMBEDDING_MODEL"
+        [ -n "${EMBEDDING_BASE_URL:-}" ]   && echo "EMBEDDING_OPENAI_BASE_URL=$EMBEDDING_BASE_URL"
+        [ -n "${EMBEDDING_API_KEY:-}" ]    && echo "EMBEDDING_OPENAI_API_KEY=$EMBEDDING_API_KEY"
+    } >> "$env_file"
+    echo "[run] LLM config applied: transport=${LLM_TRANSPORT:-unset} model=${LLM_MODEL:-unset}"
+}
+apply_llm_config
 
 # 3. Sync, install, migrate
 sync_source

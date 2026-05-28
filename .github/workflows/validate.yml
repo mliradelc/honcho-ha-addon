@@ -5,7 +5,6 @@ on:
   workflow_run:
     workflows: ["Build and publish add-on image"]
     types: [completed]
-    branches: [main]
   # Also allow manual runs and PR static checks (no Docker pull)
   pull_request:
     paths:

@@ -26,6 +26,8 @@ ACCESS_PASSWORD=$(opt access_password)
 # Persistent storage
 HONCHO_HOME="/config/honcho"
 mkdir -p "$HONCHO_HOME"/{source,venv,pgdata,redis,logs}
+# postgres user must own pgdata — HA containers run as root
+chown postgres "$HONCHO_HOME/pgdata"
 
 # Timezone (from HA env TZ)
 if [ -n "${TZ:-}" ] && [ -f "/usr/share/zoneinfo/$TZ" ]; then
@@ -36,19 +38,21 @@ fi
 # Postgres (embedded mode)
 start_postgres() {
     local pgdata="$HONCHO_HOME/pgdata"
+    # All postgres commands must run as the postgres user (initdb/pg_ctl refuse root)
+    chown postgres "$pgdata"
     if [ ! -f "$pgdata/PG_VERSION" ]; then
         echo "[run] Initialising Postgres data directory..."
-        initdb -D "$pgdata" --username=postgres --auth=trust 2>&1 | tee -a "$HONCHO_HOME/logs/initdb.log"
+        su -s /bin/bash postgres -c             "initdb -D \"$pgdata\" --username=postgres --auth=trust"             2>&1 | tee -a "$HONCHO_HOME/logs/initdb.log"
     fi
     echo "[run] Starting Postgres on 127.0.0.1:5433..."
-    pg_ctl -D "$pgdata" -o "-p 5433 -k /tmp" -w start -l "$HONCHO_HOME/logs/postgres.log"
+    su -s /bin/bash postgres -c         "pg_ctl -D \"$pgdata\" -o \"-p 5433 -k /tmp\" -w start -l \"$HONCHO_HOME/logs/postgres.log\""
     # Ensure pgvector extension
-    psql -p 5433 -U postgres -d postgres -c "CREATE EXTENSION IF NOT EXISTS vector;" 2>&1 | tee -a "$HONCHO_HOME/logs/psql.log"
+    su -s /bin/bash postgres -c         "psql -p 5433 -U postgres -d postgres -c \"CREATE EXTENSION IF NOT EXISTS vector;\""         2>&1 | tee -a "$HONCHO_HOME/logs/psql.log"
 }
 
 stop_postgres() {
-    if pg_ctl -D "$HONCHO_HOME/pgdata" status >/dev/null 2>&1; then
-        pg_ctl -D "$HONCHO_HOME/pgdata" -w stop
+    if su -s /bin/bash postgres -c             "pg_ctl -D \"$HONCHO_HOME/pgdata\" status" >/dev/null 2>&1; then
+        su -s /bin/bash postgres -c             "pg_ctl -D \"$HONCHO_HOME/pgdata\" -w stop"
     fi
 }
 

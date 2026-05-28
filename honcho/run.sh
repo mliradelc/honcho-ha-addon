@@ -23,6 +23,8 @@ REDIS_URL=$(opt redis_url)
 API_PORT=$(opt api_port)
 ACCESS_PASSWORD=$(opt access_password)
 
+OPENCONCHO_ENABLED=$(opt_bool openconcho_enabled)
+
 # LLM / Embedding configuration for Honcho Deriver
 LLM_TRANSPORT=$(opt llm_transport)
 LLM_MODEL=$(opt llm_model)
@@ -192,24 +194,97 @@ polling_sleep_interval_seconds = ${POLL_INTERVAL:-30}
 CONFIG_EOF
 }
 
-# Start nginx (ingress proxy)
+# Start nginx (ingress proxy + optional OpenConcho web UI)
 start_nginx() {
     echo "[run] Starting nginx..."
 
-    # Apply basic auth if password set
+    # Optional basic auth
+    local auth_block=""
     if [ -n "$ACCESS_PASSWORD" ]; then
         echo "[run] Enabling basic auth..."
         local htpasswd_file="$HONCHO_HOME/.htpasswd"
         echo "honcho:$(openssl passwd -apr1 <<<"$ACCESS_PASSWORD")" > "$htpasswd_file"
+        auth_block="auth_basic \"Honcho\"; auth_basic_user_file ${htpasswd_file};"
     fi
 
-    # Write nginx config from template
     local nginx_conf="/etc/nginx/nginx.conf"
-    cat > "$nginx_conf" << NGINX_EOF
+
+    if [ "$OPENCONCHO_ENABLED" = "true" ] && [ -d "/var/www/openconcho" ]; then
+        echo "[run] OpenConcho UI enabled — serving at /"
+        # OpenConcho SPA at /, Honcho API proxied at /api/
+        # The SPA connects to /api/ which nginx proxies to the Honcho FastAPI.
+        # This eliminates browser CORS — everything is same-origin.
+        cat > "$nginx_conf" << NGINX_EOF
 worker_processes auto;
 pid /run/nginx.pid;
-events {
-    worker_connections 768;
+events { worker_connections 768; }
+http {
+    include /etc/nginx/mime.types;
+    default_type application/octet-stream;
+    access_log /var/log/nginx/access.log;
+    error_log /var/log/nginx/error.log;
+    server {
+        listen 49170 default_server;
+        add_header X-Frame-Options SAMEORIGIN always;
+        add_header Content-Security-Policy "frame-ancestors 'self'" always;
+        root /var/www/openconcho;
+        index index.html;
+        ${auth_block}
+        # Honcho REST API — proxy to FastAPI
+        location /api/ {
+            proxy_pass http://127.0.0.1:${API_PORT}/;
+            proxy_set_header Host \$host;
+            proxy_set_header X-Real-IP \$remote_addr;
+            proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto \$scheme;
+            proxy_http_version 1.1;
+        }
+        # OpenConcho static assets (hashed filenames — long cache)
+        location ~* \.(?:js|mjs|css|woff2?|svg|png|ico|webp)$ {
+            expires 1y;
+            add_header Cache-Control "public, immutable";
+            try_files \$uri =404;
+        }
+        # SPA fallback
+        location / {
+            try_files \$uri \$uri/ /index.html;
+        }
+    }
+}
+NGINX_EOF
+    else
+        echo "[run] OpenConcho UI disabled — proxying / directly to Honcho API"
+        cat > "$nginx_conf" << NGINX_EOF
+worker_processes auto;
+pid /run/nginx.pid;
+events { worker_connections 768; }
+http {
+    include /etc/nginx/mime.types;
+    default_type application/octet-stream;
+    access_log /var/log/nginx/access.log;
+    error_log /var/log/nginx/error.log;
+    server {
+        listen 49170 default_server;
+        add_header X-Frame-Options SAMEORIGIN always;
+        add_header Content-Security-Policy "frame-ancestors 'self'" always;
+        ${auth_block}
+        location / {
+            proxy_pass http://127.0.0.1:${API_PORT};
+            proxy_set_header Host \$host;
+            proxy_set_header X-Real-IP \$remote_addr;
+            proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto \$scheme;
+            proxy_http_version 1.1;
+            proxy_set_header Upgrade \$http_upgrade;
+            proxy_set_header Connection "upgrade";
+        }
+    }
+}
+NGINX_EOF
+    fi
+
+    nginx -t 2>&1 || { echo "[run] nginx config test FAILED"; cat "$nginx_conf"; exit 1; }
+    nginx
 }
 http {
     include /etc/nginx/mime.types;

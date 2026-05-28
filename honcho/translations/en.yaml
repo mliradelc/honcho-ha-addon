@@ -1,2 +1,105 @@
-title: Honcho Add-on
-description: "Honcho memory backend Home Assistant add-on"
+title: Honcho
+description: Open-source memory and user-state backend for AI agents. Embeds Postgres+pgvector and Redis — zero external dependencies.
+
+configuration:
+  git_url:
+    name: Honcho repository URL
+    description: >-
+      Git repository to clone Honcho from. Change only if you want to run
+      a fork. Default: official Plastic Labs upstream.
+  git_ref:
+    name: Git ref (branch / tag / commit)
+    description: >-
+      Branch, tag, or commit SHA to check out after cloning. Leave empty
+      to follow the repository default branch. Example: v3.0.7
+  git_token:
+    name: Git personal access token
+    description: >-
+      Personal access token for private Honcho forks. Leave empty when
+      using the public upstream.
+  auto_update:
+    name: Auto-update on restart
+    description: >-
+      When enabled, Honcho source is pulled (git pull --ff-only) on every
+      add-on restart. Disable if you want to pin a specific ref.
+  db_mode:
+    name: Database mode
+    description: >-
+      embedded — starts a Postgres 15 + pgvector instance inside the
+      container (data stored in /config/honcho/pgdata).
+      external — uses the connection string in db_url (e.g. the HA
+      Postgres add-on).
+  db_url:
+    name: External database URL
+    description: >-
+      Postgres connection string used when db_mode is external.
+      Example: postgresql+psycopg://user:pass@core-postgres/honcho
+  redis_mode:
+    name: Cache mode
+    description: >-
+      embedded — starts Redis inside the container (data in
+      /config/honcho/redis). external — uses the URL in redis_url.
+  redis_url:
+    name: External Redis URL
+    description: >-
+      Redis connection string used when redis_mode is external.
+      Example: redis://core-redis:6379/0
+  api_port:
+    name: API port
+    description: >-
+      Internal TCP port the Honcho FastAPI server listens on.
+      The HA ingress always proxies to this port. Default: 8000.
+  access_password:
+    name: Ingress basic-auth password
+    description: >-
+      Protect the ingress with HTTP basic auth. Username is honcho.
+      Leave empty to disable authentication.
+  llm_transport:
+    name: LLM transport
+    description: >-
+      Transport protocol for the Deriver LLM. Use openai for any
+      OpenAI-compatible endpoint (vLLM, Hermes, KI-Connect, etc.).
+      Options: openai, anthropic, gemini.
+  llm_model:
+    name: LLM model name
+    description: >-
+      Model identifier sent to the LLM API. Must match the model name
+      returned by the provider. Example: mistral-small-4-119b-2603
+  llm_base_url:
+    name: LLM base URL
+    description: >-
+      Base URL of the OpenAI-compatible LLM endpoint. Omit trailing /v1
+      if the provider appends it automatically.
+      KI-Connect: https://chat.kiconnect.nrw/api/v1
+  llm_api_key:
+    name: LLM API key
+    description: >-
+      Bearer token / API key for the LLM endpoint. For KI-Connect use
+      your institutional API key.
+  embedding_transport:
+    name: Embedding transport
+    description: >-
+      Transport for the embedding model. Use openai for any
+      OpenAI-compatible embeddings endpoint. Options: openai, gemini.
+  embedding_model:
+    name: Embedding model name
+    description: >-
+      Model used to embed messages for semantic search. Must match the
+      name returned by the embeddings endpoint.
+      KI-Connect Mistral: e5-mistral-7b-instruct (4096-dim).
+  embedding_base_url:
+    name: Embedding base URL
+    description: >-
+      Base URL of the OpenAI-compatible embeddings endpoint.
+      Leave empty to use the same provider as llm_base_url.
+  embedding_api_key:
+    name: Embedding API key
+    description: >-
+      API key for the embeddings endpoint. Leave empty to reuse
+      llm_api_key.
+  env_vars:
+    name: Extra environment variables
+    description: >-
+      Additional environment variables injected into Honcho at startup.
+      Useful for LANGFUSE_*, AUTH_JWT_SECRET, EMBED_MESSAGES=false, etc.
+      Format: name (ALL_CAPS) + value.

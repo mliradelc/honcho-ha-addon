@@ -3,7 +3,7 @@ version: "3.0.7"
 slug: honcho
 description: "Honcho memory backend add-on for Home Assistant"
 url: "https://github.com/plastic-labs/honcho"
-image: ghcr.io/mliradelc/honcho-ha-addon/{arch}
+image: ghcr.io/mliradelc/honcho-ha-addon
 arch:
   - amd64
   - aarch64

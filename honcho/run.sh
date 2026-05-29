@@ -286,41 +286,6 @@ NGINX_EOF
     nginx -t 2>&1 || { echo "[run] nginx config test FAILED"; cat "$nginx_conf"; exit 1; }
     nginx
 }
-http {
-    include /etc/nginx/mime.types;
-    default_type application/octet-stream;
-    access_log /var/log/nginx/access.log;
-    error_log /var/log/nginx/error.log;
-
-    # HA ingress proxy
-    server {
-        listen 49170 default_server;
-        add_header X-Frame-Options SAMEORIGIN always;
-        add_header Content-Security-Policy "frame-ancestors 'self'" always;
-        location / {
-            proxy_pass http://127.0.0.1:${API_PORT};
-            proxy_set_header Host \$host;
-            proxy_set_header X-Real-IP \$remote_addr;
-            proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-            proxy_set_header X-Forwarded-Proto \$scheme;
-            proxy_http_version 1.1;
-            proxy_set_header Upgrade \$http_upgrade;
-            proxy_set_header Connection "upgrade";
-        }
-    }
-}
-NGINX_EOF
-
-    # Apply basic auth if configured
-    if [ -n "$ACCESS_PASSWORD" ]; then
-        local htpasswd_file="$HONCHO_HOME/.htpasswd"
-        # Insert basic auth into the location block
-        sed -i 's|proxy_pass http://127.0.0.1:'"${API_PORT}"';|auth_basic "Honcho";\n            auth_basic_user_file '"${htpasswd_file}"';\n            proxy_pass http://127.0.0.1:'"${API_PORT}"';|' "$nginx_conf"
-    fi
-
-    nginx -t 2>&1 || { echo "[run] nginx config test FAILED"; cat "$nginx_conf"; exit 1; }
-    nginx
-}
 
 # Environment variables passthrough
 load_env_vars() {

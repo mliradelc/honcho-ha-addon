@@ -165,11 +165,19 @@ ensure_installed() {
     echo "$marker_value" > "$marker"
 }
 
-# Render config.toml
+# Render config.toml — always rewrite if vector_dimensions changed
 render_config() {
     local cfg="$HONCHO_HOME/config.toml"
+    local target_dims="${VECTOR_DIMENSIONS:-1536}"
+
     if [ -f "$cfg" ]; then
-        return 0
+        local current_dims
+        current_dims=$(grep "^vector_dimensions" "$cfg" 2>/dev/null | awk -F'=' '{print $2}' | tr -d ' ')
+        if [ "$current_dims" = "$target_dims" ]; then
+            return 0
+        fi
+        echo "[run] vector_dimensions changed ($current_dims → $target_dims) — rewriting $cfg"
+        rm -f "$cfg"
     fi
 
     echo "[run] Writing $cfg..."
@@ -185,13 +193,49 @@ jwt_secret = "${JWT_SECRET:-change-me-in-production}"
 default_max_tokens = ${DEFAULT_MAX_TOKENS:-4096}
 
 [embedding]
-vector_dimensions = ${VECTOR_DIMENSIONS:-1536}
+vector_dimensions = ${target_dims}
 
 [deriver]
 enabled = ${DERIVER_ENABLED:-false}
 workers = ${DERIVER_WORKERS:-2}
 polling_sleep_interval_seconds = ${POLL_INTERVAL:-30}
 CONFIG_EOF
+}
+
+# Alter vector columns to match VECTOR_DIMENSIONS if they were created with a different dimension.
+# Called after postgres starts, before Alembic runs.  Safe to call on fresh installs (no-op).
+fix_vector_dimensions() {
+    local target_dim="${VECTOR_DIMENSIONS:-1536}"
+    echo "[run] Checking pgvector column dimensions (target: $target_dim)..."
+    su -s /bin/bash postgres -c \
+        "psql -h 127.0.0.1 -p 5433 -U postgres -d postgres" << PGSQL 2>&1 | tee -a "$HONCHO_HOME/logs/psql.log" || true
+DO \$\$
+DECLARE
+    r      RECORD;
+    cur_dim INT;
+    target  INT := $target_dim;
+BEGIN
+    FOR r IN
+        SELECT c.table_name, c.column_name
+        FROM information_schema.columns c
+        WHERE c.udt_name = 'vector' AND c.table_schema = 'public'
+    LOOP
+        SELECT a.atttypmod INTO cur_dim
+        FROM pg_attribute a
+        JOIN pg_class cl ON a.attrelid = cl.oid
+        WHERE cl.relname = r.table_name AND a.attname = r.column_name;
+
+        IF cur_dim IS NOT NULL AND cur_dim <> target THEN
+            RAISE NOTICE 'Resetting %.% from vector(%) to vector(%)',
+                r.table_name, r.column_name, cur_dim, target;
+            -- Clear embeddings so ALTER TYPE succeeds (no cast between different dims)
+            EXECUTE format('UPDATE %I SET %I = NULL', r.table_name, r.column_name);
+            EXECUTE format('ALTER TABLE %I ALTER COLUMN %I TYPE vector(%s)',
+                r.table_name, r.column_name, target);
+        END IF;
+    END LOOP;
+END \$\$;
+PGSQL
 }
 
 # Start nginx (ingress proxy + optional OpenConcho web UI)
@@ -329,16 +373,51 @@ esac
 load_env_vars
 
 # 2b. Apply LLM/embedding config from HA options → Honcho env vars
-# Honcho Deriver reads these to know which LLM to call for memory extraction
+# Honcho reads per-subsystem MODEL_CONFIG__ vars for Deriver, Dialectic, Summary, and Dream.
+# LLM_OPENAI_API_KEY / LLM_OPENAI_BASE_URL are the shared credentials for all openai-transport calls.
 apply_llm_config() {
     local env_file="$HONCHO_HOME/.env"
-    # Remove stale LLM lines then re-write
-    sed -i '/^LLM_\|^EMBEDDING_MODEL_CONFIG\|^OPENAI_\|^ANTHROPIC_/d' "$env_file" 2>/dev/null || true
+    touch "$env_file"
+    # Remove stale LLM/embedding lines
+    sed -i '/^LLM_\|^EMBEDDING_\|^DERIVER_MODEL_CONFIG\|^DIALECTIC_\|^SUMMARY_MODEL_CONFIG\|^DREAM_/d' "$env_file" 2>/dev/null || true
     {
-        [ -n "${LLM_TRANSPORT:-}" ]        && echo "LLM_DEFAULT_TRANSPORT=$LLM_TRANSPORT"
-        [ -n "${LLM_MODEL:-}" ]            && echo "LLM_DEFAULT_MODEL=$LLM_MODEL"
-        [ -n "${LLM_BASE_URL:-}" ]         && echo "LLM_OPENAI_BASE_URL=$LLM_BASE_URL"
+        # Shared OpenAI-compat credentials (used by all subsystems with transport=openai)
         [ -n "${LLM_API_KEY:-}" ]          && echo "LLM_OPENAI_API_KEY=$LLM_API_KEY"
+        [ -n "${LLM_BASE_URL:-}" ]         && echo "LLM_OPENAI_BASE_URL=$LLM_BASE_URL"
+
+        # Per-subsystem model overrides — each subsystem defaults to gpt-5.4-mini
+        # Deriver (memory extraction)
+        [ -n "${LLM_TRANSPORT:-}" ]        && echo "DERIVER_MODEL_CONFIG__TRANSPORT=$LLM_TRANSPORT"
+        [ -n "${LLM_MODEL:-}" ]            && echo "DERIVER_MODEL_CONFIG__MODEL=$LLM_MODEL"
+        [ -n "${LLM_BASE_URL:-}" ]         && echo "DERIVER_MODEL_CONFIG__OVERRIDES__BASE_URL=$LLM_BASE_URL"
+        [ -n "${LLM_API_KEY:-}" ]          && echo "DERIVER_MODEL_CONFIG__OVERRIDES__API_KEY=$LLM_API_KEY"
+        # Dialectic (reasoning — applies to all levels: minimal/low/medium/high/max)
+        [ -n "${LLM_TRANSPORT:-}" ]        && echo "DIALECTIC_LEVELS__minimal__MODEL_CONFIG__TRANSPORT=$LLM_TRANSPORT"
+        [ -n "${LLM_MODEL:-}" ]            && echo "DIALECTIC_LEVELS__minimal__MODEL_CONFIG__MODEL=$LLM_MODEL"
+        [ -n "${LLM_TRANSPORT:-}" ]        && echo "DIALECTIC_LEVELS__low__MODEL_CONFIG__TRANSPORT=$LLM_TRANSPORT"
+        [ -n "${LLM_MODEL:-}" ]            && echo "DIALECTIC_LEVELS__low__MODEL_CONFIG__MODEL=$LLM_MODEL"
+        [ -n "${LLM_TRANSPORT:-}" ]        && echo "DIALECTIC_LEVELS__medium__MODEL_CONFIG__TRANSPORT=$LLM_TRANSPORT"
+        [ -n "${LLM_MODEL:-}" ]            && echo "DIALECTIC_LEVELS__medium__MODEL_CONFIG__MODEL=$LLM_MODEL"
+        [ -n "${LLM_TRANSPORT:-}" ]        && echo "DIALECTIC_LEVELS__high__MODEL_CONFIG__TRANSPORT=$LLM_TRANSPORT"
+        [ -n "${LLM_MODEL:-}" ]            && echo "DIALECTIC_LEVELS__high__MODEL_CONFIG__MODEL=$LLM_MODEL"
+        [ -n "${LLM_TRANSPORT:-}" ]        && echo "DIALECTIC_LEVELS__max__MODEL_CONFIG__TRANSPORT=$LLM_TRANSPORT"
+        [ -n "${LLM_MODEL:-}" ]            && echo "DIALECTIC_LEVELS__max__MODEL_CONFIG__MODEL=$LLM_MODEL"
+        # Summary
+        [ -n "${LLM_TRANSPORT:-}" ]        && echo "SUMMARY_MODEL_CONFIG__TRANSPORT=$LLM_TRANSPORT"
+        [ -n "${LLM_MODEL:-}" ]            && echo "SUMMARY_MODEL_CONFIG__MODEL=$LLM_MODEL"
+        [ -n "${LLM_BASE_URL:-}" ]         && echo "SUMMARY_MODEL_CONFIG__OVERRIDES__BASE_URL=$LLM_BASE_URL"
+        [ -n "${LLM_API_KEY:-}" ]          && echo "SUMMARY_MODEL_CONFIG__OVERRIDES__API_KEY=$LLM_API_KEY"
+        # Dream (deduction + induction)
+        [ -n "${LLM_TRANSPORT:-}" ]        && echo "DREAM_DEDUCTION_MODEL_CONFIG__TRANSPORT=$LLM_TRANSPORT"
+        [ -n "${LLM_MODEL:-}" ]            && echo "DREAM_DEDUCTION_MODEL_CONFIG__MODEL=$LLM_MODEL"
+        [ -n "${LLM_BASE_URL:-}" ]         && echo "DREAM_DEDUCTION_MODEL_CONFIG__OVERRIDES__BASE_URL=$LLM_BASE_URL"
+        [ -n "${LLM_API_KEY:-}" ]          && echo "DREAM_DEDUCTION_MODEL_CONFIG__OVERRIDES__API_KEY=$LLM_API_KEY"
+        [ -n "${LLM_TRANSPORT:-}" ]        && echo "DREAM_INDUCTION_MODEL_CONFIG__TRANSPORT=$LLM_TRANSPORT"
+        [ -n "${LLM_MODEL:-}" ]            && echo "DREAM_INDUCTION_MODEL_CONFIG__MODEL=$LLM_MODEL"
+        [ -n "${LLM_BASE_URL:-}" ]         && echo "DREAM_INDUCTION_MODEL_CONFIG__OVERRIDES__BASE_URL=$LLM_BASE_URL"
+        [ -n "${LLM_API_KEY:-}" ]          && echo "DREAM_INDUCTION_MODEL_CONFIG__OVERRIDES__API_KEY=$LLM_API_KEY"
+
+        # Embedding
         [ -n "${EMBEDDING_TRANSPORT:-}" ]  && echo "EMBEDDING_MODEL_CONFIG__TRANSPORT=$EMBEDDING_TRANSPORT"
         [ -n "${EMBEDDING_MODEL:-}" ]      && echo "EMBEDDING_MODEL_CONFIG__MODEL=$EMBEDDING_MODEL"
         [ -n "${EMBEDDING_BASE_URL:-}" ]   && echo "EMBEDDING_MODEL_CONFIG__OVERRIDES__BASE_URL=$EMBEDDING_BASE_URL"
@@ -348,7 +427,8 @@ apply_llm_config() {
 }
 apply_llm_config
 
-# 3. Sync, install, migrate
+# 3. Fix vector column dimensions if needed, then sync, install, migrate
+fix_vector_dimensions
 sync_source
 ensure_installed
 

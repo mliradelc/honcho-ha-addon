@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented here. This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.20] - 2026-05-30
+
+### Fixed
+- `apply_llm_config`: replaced non-functional `LLM_DEFAULT_TRANSPORT`/`LLM_DEFAULT_MODEL` vars with correct
+  per-subsystem `MODEL_CONFIG__*` overrides — Deriver, Dialectic (all 5 levels), Summary, and Dream now
+  route to the configured LLM instead of defaulting to `gpt-5.4-mini`
+- `render_config`: was a no-op if `config.toml` already existed; now rewrites it when `VECTOR_DIMENSIONS`
+  changes, preventing stale dimension mismatches after config updates
+- Added `fix_vector_dimensions()`: auto-`ALTER TABLE` to resize pgvector columns to match `VECTOR_DIMENSIONS`
+  on startup, resolving "Embedding dimension mismatch: Expected 1536, got 4096" on existing installs
+
 ## [3.0.19] - 2026-05-30
 
 ### Fixed

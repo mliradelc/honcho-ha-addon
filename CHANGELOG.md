@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented here. This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.19] - 2026-05-30
+
+### Fixed
+- Embedding env var mismatch: run.sh now writes correct `EMBEDDING_MODEL_CONFIG__*` vars.
+
 ## [3.0.18] - 2026-05-30
 
 ### Fixed

@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented here. This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.18] - 2026-05-30
+
+### Fixed
+- Critical boot loop: orphaned nginx `http { }` block outside `start_nginx()` in v3.0.17.
+
 ## [3.0.17] - 2026-05-28
 
 ### Added

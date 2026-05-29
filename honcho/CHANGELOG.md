@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented here. This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.18] - 2026-05-30
+
+### Fixed
+- **Critical boot loop** (`/run.sh: line 289: http: command not found`): orphaned
+  nginx `http { }` config block was accidentally left outside the `start_nginx()`
+  function in v3.0.17, causing bash to attempt to execute `http` as a command on
+  every start. Add-on entered an infinite s6 restart loop. Lines 289–323 removed.
+
 ## [3.0.17] - 2026-05-28
 
 ### Added

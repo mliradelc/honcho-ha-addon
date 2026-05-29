@@ -2,6 +2,23 @@
 
 All notable changes to this project will be documented here. This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.19] - 2026-05-30
+
+### Fixed
+- **Embedding env var mismatch** (`Error code: 401 - Incorrect API key ... api.openai.com`):
+  `run.sh` was writing `EMBEDDING_DEFAULT_TRANSPORT`, `EMBEDDING_OPENAI_BASE_URL`, and
+  `EMBEDDING_OPENAI_API_KEY` — env var names Honcho does not read. Honcho's
+  `EmbeddingSettings` uses pydantic-settings with `env_prefix="EMBEDDING_"` and
+  `env_nested_delimiter="__"`, so the correct names are
+  `EMBEDDING_MODEL_CONFIG__TRANSPORT`, `EMBEDDING_MODEL_CONFIG__MODEL`,
+  `EMBEDDING_MODEL_CONFIG__OVERRIDES__BASE_URL`, and
+  `EMBEDDING_MODEL_CONFIG__OVERRIDES__API_KEY`. Without these, Honcho fell through to
+  its default OpenAI transport with no base_url, causing all conclusion/search writes
+  to fail with a 401 against `api.openai.com`.
+- Stale-entry cleanup regex in `apply_llm_config()` now targets
+  `^EMBEDDING_MODEL_CONFIG` instead of `^EMBEDDING_` to avoid accidentally stripping
+  unrelated `EMBEDDING_*` env vars set by users.
+
 ## [3.0.18] - 2026-05-30
 
 ### Fixed

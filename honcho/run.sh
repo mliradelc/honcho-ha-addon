@@ -333,16 +333,16 @@ load_env_vars
 apply_llm_config() {
     local env_file="$HONCHO_HOME/.env"
     # Remove stale LLM lines then re-write
-    sed -i '/^LLM_\|^EMBEDDING_\|^OPENAI_\|^ANTHROPIC_/d' "$env_file" 2>/dev/null || true
+    sed -i '/^LLM_\|^EMBEDDING_MODEL_CONFIG\|^OPENAI_\|^ANTHROPIC_/d' "$env_file" 2>/dev/null || true
     {
         [ -n "${LLM_TRANSPORT:-}" ]        && echo "LLM_DEFAULT_TRANSPORT=$LLM_TRANSPORT"
         [ -n "${LLM_MODEL:-}" ]            && echo "LLM_DEFAULT_MODEL=$LLM_MODEL"
         [ -n "${LLM_BASE_URL:-}" ]         && echo "LLM_OPENAI_BASE_URL=$LLM_BASE_URL"
         [ -n "${LLM_API_KEY:-}" ]          && echo "LLM_OPENAI_API_KEY=$LLM_API_KEY"
-        [ -n "${EMBEDDING_TRANSPORT:-}" ]  && echo "EMBEDDING_DEFAULT_TRANSPORT=$EMBEDDING_TRANSPORT"
-        [ -n "${EMBEDDING_MODEL:-}" ]      && echo "EMBEDDING_DEFAULT_MODEL=$EMBEDDING_MODEL"
-        [ -n "${EMBEDDING_BASE_URL:-}" ]   && echo "EMBEDDING_OPENAI_BASE_URL=$EMBEDDING_BASE_URL"
-        [ -n "${EMBEDDING_API_KEY:-}" ]    && echo "EMBEDDING_OPENAI_API_KEY=$EMBEDDING_API_KEY"
+        [ -n "${EMBEDDING_TRANSPORT:-}" ]  && echo "EMBEDDING_MODEL_CONFIG__TRANSPORT=$EMBEDDING_TRANSPORT"
+        [ -n "${EMBEDDING_MODEL:-}" ]      && echo "EMBEDDING_MODEL_CONFIG__MODEL=$EMBEDDING_MODEL"
+        [ -n "${EMBEDDING_BASE_URL:-}" ]   && echo "EMBEDDING_MODEL_CONFIG__OVERRIDES__BASE_URL=$EMBEDDING_BASE_URL"
+        [ -n "${EMBEDDING_API_KEY:-}" ]    && echo "EMBEDDING_MODEL_CONFIG__OVERRIDES__API_KEY=$EMBEDDING_API_KEY"
     } >> "$env_file"
     echo "[run] LLM config applied: transport=${LLM_TRANSPORT:-unset} model=${LLM_MODEL:-unset}"
 }

@@ -160,6 +160,11 @@ ensure_installed() {
     if [ -f alembic.ini ]; then
         echo "[run] Running Alembic migrations..."
         uv run alembic upgrade head 2>&1 | tee "$HONCHO_HOME/logs/migrate.log" || true
+        # Resize vector columns to match EMBEDDING_VECTOR_DIMENSIONS (Alembic defaults to 1536)
+        if [ -f scripts/configure_embeddings.py ]; then
+            echo "[run] Configuring embedding dimensions to ${EMBEDDING_VECTOR_DIMENSIONS:-1536}..."
+            uv run python scripts/configure_embeddings.py 2>&1 | tee -a "$HONCHO_HOME/logs/migrate.log" || true
+        fi
     fi
 
     echo "$marker_value" > "$marker"

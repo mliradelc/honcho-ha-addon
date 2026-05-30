@@ -422,6 +422,11 @@ apply_llm_config() {
         [ -n "${EMBEDDING_MODEL:-}" ]      && echo "EMBEDDING_MODEL_CONFIG__MODEL=$EMBEDDING_MODEL"
         [ -n "${EMBEDDING_BASE_URL:-}" ]   && echo "EMBEDDING_MODEL_CONFIG__OVERRIDES__BASE_URL=$EMBEDDING_BASE_URL"
         [ -n "${EMBEDDING_API_KEY:-}" ]    && echo "EMBEDDING_MODEL_CONFIG__OVERRIDES__API_KEY=$EMBEDDING_API_KEY"
+        # Remap EMBEDDING_DIMENSIONS_MODE to EMBEDDING_MODEL_CONFIG__DIMENSIONS_MODE
+        # Honcho reads the pydantic nested field; the flat name is silently ignored.
+        local dims_mode
+        dims_mode=$(jq -r '.env_vars // [] | .[] | select(.name == "EMBEDDING_DIMENSIONS_MODE") | .value' "$OPTIONS_FILE" 2>/dev/null || true)
+        [ -n "${dims_mode:-}" ] && echo "EMBEDDING_MODEL_CONFIG__DIMENSIONS_MODE=$dims_mode"
     } >> "$env_file"
     echo "[run] LLM config applied: transport=${LLM_TRANSPORT:-unset} model=${LLM_MODEL:-unset}"
 }

@@ -168,7 +168,7 @@ ensure_installed() {
 # Render config.toml — always rewrite if vector_dimensions changed
 render_config() {
     local cfg="$HONCHO_HOME/config.toml"
-    local target_dims="${VECTOR_DIMENSIONS:-1536}"
+    local target_dims="${EMBEDDING_VECTOR_DIMENSIONS:-1536}"
 
     if [ -f "$cfg" ]; then
         local current_dims
@@ -205,7 +205,7 @@ CONFIG_EOF
 # Alter vector columns to match VECTOR_DIMENSIONS if they were created with a different dimension.
 # Called after postgres starts, before Alembic runs.  Safe to call on fresh installs (no-op).
 fix_vector_dimensions() {
-    local target_dim="${VECTOR_DIMENSIONS:-1536}"
+    local target_dim="${EMBEDDING_VECTOR_DIMENSIONS:-1536}"
     echo "[run] Checking pgvector column dimensions (target: $target_dim)..."
     su -s /bin/bash postgres -c \
         "psql -h 127.0.0.1 -p 5433 -U postgres -d postgres" << PGSQL 2>&1 | tee -a "$HONCHO_HOME/logs/psql.log" || true

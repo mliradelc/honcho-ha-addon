@@ -433,6 +433,11 @@ ensure_installed
 
 # 3b. Always resize vector columns to EMBEDDING_VECTOR_DIMENSIONS (idempotent — fast no-op when already correct)
 if [ -f "$HONCHO_HOME/source/scripts/configure_embeddings.py" ]; then
+    # Apply addon-bundled patch: skip HNSW index recreation when dims > 2000 (pgvector hard limit)
+    ADDON_SCRIPT="/usr/share/honcho/scripts/configure_embeddings.py"
+    if [ -f "$ADDON_SCRIPT" ]; then
+        cp "$ADDON_SCRIPT" "$HONCHO_HOME/source/scripts/configure_embeddings.py"
+    fi
     echo "[run] Configuring embedding dimensions to ${EMBEDDING_VECTOR_DIMENSIONS:-1536}..."
     cd "$HONCHO_HOME/source"
     source "$HONCHO_HOME/venv/bin/activate"

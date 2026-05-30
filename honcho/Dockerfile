@@ -51,6 +51,9 @@ COPY --from=openconcho-builder /openconcho/packages/web/dist /var/www/openconcho
 COPY run.sh /
 RUN chmod +x /run.sh
 
+# Patched scripts (override source-repo versions at runtime)
+COPY scripts/ /usr/share/honcho/scripts/
+
 RUN mkdir -p /var/www /var/log/nginx /run/nginx /config/honcho
 
 ENV LANG=C.UTF-8

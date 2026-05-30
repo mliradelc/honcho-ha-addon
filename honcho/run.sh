@@ -163,7 +163,7 @@ ensure_installed() {
         # Resize vector columns to match EMBEDDING_VECTOR_DIMENSIONS (Alembic defaults to 1536)
         if [ -f scripts/configure_embeddings.py ]; then
             echo "[run] Configuring embedding dimensions to ${EMBEDDING_VECTOR_DIMENSIONS:-1536}..."
-            uv run python scripts/configure_embeddings.py 2>&1 | tee -a "$HONCHO_HOME/logs/migrate.log" || true
+            uv run python scripts/configure_embeddings.py --yes 2>&1 | tee -a "$HONCHO_HOME/logs/migrate.log" || true
         fi
     fi
 
@@ -432,8 +432,7 @@ apply_llm_config() {
 }
 apply_llm_config
 
-# 3. Fix vector column dimensions if needed, then sync, install, migrate
-fix_vector_dimensions
+# 3. Sync source and install dependencies, then migrate
 sync_source
 ensure_installed
 

@@ -160,11 +160,6 @@ ensure_installed() {
     if [ -f alembic.ini ]; then
         echo "[run] Running Alembic migrations..."
         uv run alembic upgrade head 2>&1 | tee "$HONCHO_HOME/logs/migrate.log" || true
-        # Resize vector columns to match EMBEDDING_VECTOR_DIMENSIONS (Alembic defaults to 1536)
-        if [ -f scripts/configure_embeddings.py ]; then
-            echo "[run] Configuring embedding dimensions to ${EMBEDDING_VECTOR_DIMENSIONS:-1536}..."
-            uv run python scripts/configure_embeddings.py --yes 2>&1 | tee -a "$HONCHO_HOME/logs/migrate.log" || true
-        fi
     fi
 
     echo "$marker_value" > "$marker"
@@ -435,6 +430,14 @@ apply_llm_config
 # 3. Sync source and install dependencies, then migrate
 sync_source
 ensure_installed
+
+# 3b. Always resize vector columns to EMBEDDING_VECTOR_DIMENSIONS (idempotent — fast no-op when already correct)
+if [ -f "$HONCHO_HOME/source/scripts/configure_embeddings.py" ]; then
+    echo "[run] Configuring embedding dimensions to ${EMBEDDING_VECTOR_DIMENSIONS:-1536}..."
+    cd "$HONCHO_HOME/source"
+    source "$HONCHO_HOME/venv/bin/activate"
+    uv run python scripts/configure_embeddings.py --yes 2>&1 | tee -a "$HONCHO_HOME/logs/migrate.log" || true
+fi
 
 # 4. Render config
 render_config

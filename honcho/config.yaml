@@ -1,5 +1,5 @@
 name: Honcho
-version: "3.0.20"
+version: "3.0.21"
 slug: honcho
 description: "Open-source memory & user-state backend for AI agents. Embeds Postgres+pgvector and Redis — zero external dependencies."
 url: "https://github.com/mliradelc/honcho-ha-addon"
@@ -21,7 +21,7 @@ ports:
 ports_description:
   8000/tcp: "HTTP API for Honcho"
 options:
-  git_url: "https://github.com/plastic-labs/honcho.git"
+  git_url: "https://github.com/mliradelc/honcho-1.git"
   git_ref: ""
   git_token: ""
   auto_update: false

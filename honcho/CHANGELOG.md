@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented here. This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.21] - 2026-05-30
+
+### Changed
+- Default `git_url` now points to `mliradelc/honcho-1` fork which adds the
+  `mistral` transport — set `llm_transport = mistral` in add-on config to
+  enable Mistral-strict role-sequence sanitisation (fixes `Unexpected role
+  'user' after role 'tool'` 400 errors from KI:Connect Mistral endpoints)
+
 ## [3.0.20] - 2026-05-30
 
 ### Fixed

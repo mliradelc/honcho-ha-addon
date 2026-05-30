@@ -52,7 +52,7 @@ _EMBEDDING_TABLES: tuple[str, ...] = ("documents", "message_embeddings")
 
 # pgvector HNSW index hard limit — indices above this dimension must use
 # IVFFlat or be omitted entirely.
-HNSW_MAX_DIMS = 2000
+_HNSW_MAX_DIMS = 2000
 
 # Defense-in-depth for the dynamic SQL paths in this script. The values we
 # interpolate (schema from settings, index names from pg_indexes, table
@@ -244,17 +244,13 @@ async def _apply_pgvector_alter(engine: AsyncEngine, plan: _PgvectorPlan) -> Non
         # Step 5: recreate HNSW indices from the saved definitions.
         # Guard: pgvector HNSW has a hard 2000-dimension limit.
         for index_name, ddl in index_defs:
-            if plan.target_dim > HNSW_MAX_DIMS:
+            if plan.target_dim > _HNSW_MAX_DIMS:
                 logger.warning(
                     "SKIP %s: HNSW does not support >%d dims (target=%d). "
                     "Create an IVFFlat index manually if needed.",
                     index_name,
-                    HNSW_MAX_DIMS,
+                    _HNSW_MAX_DIMS,
                     plan.target_dim,
-                )
-                print(
-                    f"  SKIP {index_name}: HNSW does not support >{HNSW_MAX_DIMS} dims "
-                    f"(target={plan.target_dim}). Create an IVFFlat index manually if needed."
                 )
                 continue
             logger.info("recreating HNSW index %s", index_name)
@@ -467,9 +463,9 @@ async def _run_pipeline(args: argparse.Namespace) -> int:
         f"  - ALTER COLUMN embedding TYPE vector({target_dim}) USING NULL"
         + " on both tables"
     )
-    if target_dim > HNSW_MAX_DIMS:
+    if target_dim > _HNSW_MAX_DIMS:
         print(
-            f"  - SKIP HNSW index recreation (target {target_dim} > {HNSW_MAX_DIMS} limit)"
+            f"  - SKIP HNSW index recreation (target {target_dim} > {_HNSW_MAX_DIMS} limit)"
         )
     else:
         print("  - CREATE HNSW indices from snapshotted definitions")

@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented here. This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.22] - 2026-05-30
+
+### Fixed
+- `render_config` and `fix_vector_dimensions`: were reading `VECTOR_DIMENSIONS`
+  (non-existent) — corrected to `EMBEDDING_VECTOR_DIMENSIONS` per Honcho's
+  `.env.template`. Set `EMBEDDING_VECTOR_DIMENSIONS=4096` in env_vars when using
+  KI:Connect `e5-mistral-7b-instruct`.
+
 ## [3.0.21] - 2026-05-30
 
 ### Changed

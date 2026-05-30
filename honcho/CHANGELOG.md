@@ -2,6 +2,54 @@
 
 All notable changes to this project will be documented here. This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.27] - 2026-05-30
+
+### Fixed
+- `apply_llm_config()` in `run.sh` now remaps `EMBEDDING_DIMENSIONS_MODE` (user-facing
+  add-on env_var name) to `EMBEDDING_MODEL_CONFIG__DIMENSIONS_MODE` (the pydantic-settings
+  nested field that Honcho actually reads). Without this, `dimensions=4096` was sent to
+  every KI:Connect embedding call, which rejects that parameter — causing HTTP 500 on
+  both the dialectic (`/peers/{id}/chat`) and conclusions (`/workspaces/{id}/conclusions`)
+  endpoints.
+
+## [3.0.26] - 2026-05-30
+
+### Fixed
+- `scripts/configure_embeddings.py` in `honcho-max`: skip HNSW index recreation when
+  `EMBEDDING_VECTOR_DIMENSIONS > 2000`. pgvector's HNSW index type has a hard 2000-dim
+  limit — attempting to recreate it after resizing columns to 4096 raised
+  `ProgramLimitExceeded: column cannot have more than 2000 dimensions for hnsw index`.
+  Index is now skipped with a warning; use IVFFlat manually for high-dimensional ANN search.
+
+## [3.0.25] - 2026-05-30
+
+### Fixed
+- `configure_embeddings.py --yes` call moved to the **main execution flow** in `run.sh`,
+  outside the marker-gated `ensure_installed()` block. Previously, if the install marker
+  was unchanged (same git HEAD), `ensure_installed()` returned early and the script never
+  ran — leaving pgvector columns at 1536 on every restart. Now runs unconditionally after
+  `ensure_installed`, before `render_config`. The script is idempotent (no-op when dims
+  already match).
+
+## [3.0.24] - 2026-05-30
+
+### Fixed
+- Pass `--yes` flag to `configure_embeddings.py` — the script prompts `apply? [y/N]`
+  interactively and crashed with `EOFError: EOF when reading a line` when run in a
+  non-TTY container environment.
+- Remove `fix_vector_dimensions()` call from main flow — the raw SQL `ALTER TABLE`
+  fails when an HNSW index exists (pgvector HNSW hard limit: 2000 dims).
+  `configure_embeddings.py` handles this correctly by dropping the index first.
+
+## [3.0.23] - 2026-05-30
+
+### Fixed
+- Run `configure_embeddings.py --yes` after `alembic upgrade head` in `ensure_installed()`.
+  Alembic creates pgvector columns at the hardcoded default of 1536 dims. The script
+  resizes them to `EMBEDDING_VECTOR_DIMENSIONS` immediately after migration, preventing
+  the startup `StartupValidationError: public.documents.embedding dim (1536) does not
+  match EMBEDDING_VECTOR_DIMENSIONS (4096)`.
+
 ## [3.0.22] - 2026-05-30
 
 ### Fixed

@@ -260,14 +260,34 @@ start_nginx() {
         # runtimeConfig.ts reads window.__OPENCONCHO_DEFAULT_HONCHO_URL__;
         # "same-origin" tells it to use location.origin (proxied via /v3/).
         cat > /var/www/openconcho/config.js << 'CFGEOF'
-window.__OPENCONCHO_DEFAULT_HONCHO_URL__ = "same-origin";
+(function() {
+  // Auto-detect HA ingress vs direct LAN access.
+  // HA ingress URL: /hassio/ingress/<slug>/...
+  // In ingress mode the SPA must prefix API calls with the ingress path so
+  // they route back through the HA proxy. In direct mode nginx /v3/ handles it.
+  var path = window.location.pathname;
+  var m = path.match(/^(\/hassio\/ingress\/[^\/]+)/);
+  window.__OPENCONCHO_DEFAULT_HONCHO_URL__ = m
+    ? window.location.origin + m[1]
+    : "same-origin";
+})();
 CFGEOF
         # Inject runtime config so OpenConcho uses same-origin API calls
         # instead of prompting the user to enter the server URL manually.
         # runtimeConfig.ts reads window.__OPENCONCHO_DEFAULT_HONCHO_URL__;
         # "same-origin" tells it to use location.origin (proxied via /v3/).
         cat > /var/www/openconcho/config.js << 'CFGEOF'
-window.__OPENCONCHO_DEFAULT_HONCHO_URL__ = "same-origin";
+(function() {
+  // Auto-detect HA ingress vs direct LAN access.
+  // HA ingress URL: /hassio/ingress/<slug>/...
+  // In ingress mode the SPA must prefix API calls with the ingress path so
+  // they route back through the HA proxy. In direct mode nginx /v3/ handles it.
+  var path = window.location.pathname;
+  var m = path.match(/^(\/hassio\/ingress\/[^\/]+)/);
+  window.__OPENCONCHO_DEFAULT_HONCHO_URL__ = m
+    ? window.location.origin + m[1]
+    : "same-origin";
+})();
 CFGEOF
         # OpenConcho SPA at /, Honcho API proxied at /api/
         # The SPA connects to /api/ which nginx proxies to the Honcho FastAPI.

@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented here. This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.36] - 2026-05-31
+### Fixed
+- OpenConcho Web UI: config.js now seeds `localStorage['openconcho:instances']`
+  directly (the actual key OpenConcho reads) instead of the non-existent
+  `window.__OPENCONCHO_DEFAULT_HONCHO_URL__` global. On first load the app
+  will skip the "connect to server" setup screen and connect automatically to
+  the local Honcho instance, detecting the HA ingress prefix at runtime.
+
 ## [3.0.35] - 2026-05-31
 ### Fixed
 - OpenConcho Web UI: `config.js` now auto-detects HA ingress prefix at runtime.

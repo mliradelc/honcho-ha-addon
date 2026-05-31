@@ -262,6 +262,13 @@ start_nginx() {
         cat > /var/www/openconcho/config.js << 'CFGEOF'
 window.__OPENCONCHO_DEFAULT_HONCHO_URL__ = "same-origin";
 CFGEOF
+        # Inject runtime config so OpenConcho uses same-origin API calls
+        # instead of prompting the user to enter the server URL manually.
+        # runtimeConfig.ts reads window.__OPENCONCHO_DEFAULT_HONCHO_URL__;
+        # "same-origin" tells it to use location.origin (proxied via /v3/).
+        cat > /var/www/openconcho/config.js << 'CFGEOF'
+window.__OPENCONCHO_DEFAULT_HONCHO_URL__ = "same-origin";
+CFGEOF
         # OpenConcho SPA at /, Honcho API proxied at /api/
         # The SPA connects to /api/ which nginx proxies to the Honcho FastAPI.
         # This eliminates browser CORS — everything is same-origin.
@@ -284,6 +291,15 @@ http {
         # Honcho REST API — proxy to FastAPI
         location /api/ {
             proxy_pass http://127.0.0.1:${API_PORT}/;
+            proxy_set_header Host \$host;
+            proxy_set_header X-Real-IP \$remote_addr;
+            proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto \$scheme;
+            proxy_http_version 1.1;
+        }
+        # Honcho REST API v3 — same-origin proxy for OpenConcho SPA
+        location /v3/ {
+            proxy_pass http://127.0.0.1:${API_PORT}/v3/;
             proxy_set_header Host \$host;
             proxy_set_header X-Real-IP \$remote_addr;
             proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
@@ -343,6 +359,13 @@ http {
 NGINX_EOF
     fi
 
+    # Patch OpenConcho index.html to load runtime config.js before the app
+    if [ -f "/var/www/openconcho/index.html" ]; then
+        if ! grep -q "config.js" /var/www/openconcho/index.html; then
+            sed -i 's|</head>|<script src="/config.js"></script></head>|' /var/www/openconcho/index.html
+            echo "[run] Patched index.html to load config.js"
+        fi
+    fi
     # Patch OpenConcho index.html to load runtime config.js before the app
     if [ -f "/var/www/openconcho/index.html" ]; then
         if ! grep -q "config.js" /var/www/openconcho/index.html; then

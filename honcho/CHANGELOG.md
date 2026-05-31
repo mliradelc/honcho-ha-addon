@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented here. This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.32] - 2026-05-31
+
+### Fixed
+- **MistralBackend Rule 5**: `_sanitize_messages()` now removes a trailing empty
+  assistant stub before sending messages to Mistral. Rule 3 (added in a prior release)
+  appended an empty assistant turn after a trailing `tool` message — but Mistral's
+  server rejects any request where the final message has `role: assistant` with
+  `add_generation_prompt=True`, returning:
+  `"Cannot set add_generation_prompt to True when the last message is from the assistant"`
+  The stub is unnecessary: Mistral generates the assistant reply itself. Removing it
+  fixes `honcho_reasoning` and `honcho_profile` (peer card) calls that use the
+  dialectic agentic tool loop.
+
 ## [3.0.31] - 2026-05-31
 
 ### Fixed

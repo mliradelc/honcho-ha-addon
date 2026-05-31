@@ -1,5 +1,10 @@
 # Changelog
 
+## [3.0.39] — 2026-05-31
+### Fixed
+- Add runtime nginx dedup guard: duplicate `location /v3/` blocks (caused by Docker layer
+  cache on HA Supervisor) are now automatically removed at startup before `nginx -t`, 
+  preventing crash-loop restart on `installed_version=3.0.38`.
 ## [3.0.38] - 2026-05-31
 ### Fixed
 - Remove duplicate `location /v3/` block in nginx config (caused nginx config test failure and add-on crash at startup)

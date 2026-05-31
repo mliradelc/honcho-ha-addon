@@ -23,7 +23,6 @@ REDIS_URL=$(opt redis_url)
 API_PORT=$(opt api_port)
 ACCESS_PASSWORD=$(opt access_password)
 
-OPENCONCHO_ENABLED=$(opt_bool openconcho_enabled)
 
 # LLM / Embedding configuration for Honcho Deriver
 LLM_TRANSPORT=$(opt llm_transport)
@@ -238,104 +237,19 @@ END \$\$;
 PGSQL
 }
 
-# Start nginx (ingress proxy + optional OpenConcho web UI)
+# Start nginx — simple reverse proxy to Honcho FastAPI
 start_nginx() {
     echo "[run] Starting nginx..."
 
-    # Optional basic auth
-    local auth_block=""
+    local auth_block=***
     if [ -n "$ACCESS_PASSWORD" ]; then
         echo "[run] Enabling basic auth..."
         local htpasswd_file="$HONCHO_HOME/.htpasswd"
-        echo "honcho:$(openssl passwd -apr1 <<<"$ACCESS_PASSWORD")" > "$htpasswd_file"
+        printf '%s' "honcho:$(openssl passwd -apr1 <<< "$ACCESS_PASSWORD")" > "$htpasswd_file"
         auth_block="auth_basic \"Honcho\"; auth_basic_user_file ${htpasswd_file};"
     fi
 
-    local nginx_conf="/etc/nginx/nginx.conf"
-
-    if [ "$OPENCONCHO_ENABLED" = "true" ] && [ -d "/var/www/openconcho" ]; then
-        echo "[run] OpenConcho UI enabled — serving at /"
-        # Inject runtime config so OpenConcho uses same-origin API calls
-        # instead of prompting the user to enter the server URL manually.
-        # runtimeConfig.ts reads window.__OPENCONCHO_DEFAULT_HONCHO_URL__;
-        # "same-origin" tells it to use location.origin (proxied via /v3/).
-        cat > /var/www/openconcho/config.js << 'CFGEOF'
-(function() {
-  // Seed localStorage so OpenConcho skips the "connect to server" setup screen.
-  // OpenConcho reads from localStorage['openconcho:instances'] — there is no
-  // window global injection API. Only runs if not already configured (safe for
-  // users who have changed their settings).
-  var KEY = 'openconcho:instances';
-  if (!localStorage.getItem(KEY)) {
-    // Detect HA ingress prefix (/hassio/ingress/<slug>).
-    // openapi-fetch concatenates baseUrl + "/v3/path" (string concat, not URL
-    // constructor), so the full ingress origin is the correct baseUrl — nginx
-    // inside the container then routes /v3/ to Honcho FastAPI.
-    var m = window.location.pathname.match(/^(\/hassio\/ingress\/[^\/]+)/);
-    var baseUrl = m
-      ? (window.location.origin + m[1])
-      : window.location.origin;
-    var id = 'ha-local';
-    localStorage.setItem(KEY, JSON.stringify({
-      instances: [{ id: id, name: 'Local Honcho', baseUrl: baseUrl, token: '' }],
-      activeId: id
-    }));
-  }
-})();
-CFGEOF
-        # OpenConcho SPA at /, Honcho API proxied at /api/
-        # The SPA connects to /api/ which nginx proxies to the Honcho FastAPI.
-        # This eliminates browser CORS — everything is same-origin.
-        cat > "$nginx_conf" << NGINX_EOF
-worker_processes auto;
-pid /run/nginx.pid;
-events { worker_connections 768; }
-http {
-    include /etc/nginx/mime.types;
-    default_type application/octet-stream;
-    access_log /var/log/nginx/access.log;
-    error_log /var/log/nginx/error.log;
-    server {
-        listen 49170 default_server;
-        add_header X-Frame-Options SAMEORIGIN always;
-        add_header Content-Security-Policy "frame-ancestors 'self'" always;
-        root /var/www/openconcho;
-        index index.html;
-        ${auth_block}
-        # Honcho REST API — proxy to FastAPI
-        location /api/ {
-            proxy_pass http://127.0.0.1:${API_PORT}/;
-            proxy_set_header Host \$host;
-            proxy_set_header X-Real-IP \$remote_addr;
-            proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-            proxy_set_header X-Forwarded-Proto \$scheme;
-            proxy_http_version 1.1;
-        }
-        # Honcho REST API v3 — same-origin proxy for OpenConcho SPA
-        location /v3/ {
-            proxy_pass http://127.0.0.1:${API_PORT}/v3/;
-            proxy_set_header Host \$host;
-            proxy_set_header X-Real-IP \$remote_addr;
-            proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-            proxy_set_header X-Forwarded-Proto \$scheme;
-            proxy_http_version 1.1;
-        }
-        # OpenConcho static assets (hashed filenames — long cache)
-        location ~* \.(?:js|mjs|css|woff2?|svg|png|ico|webp)$ {
-            expires 1y;
-            add_header Cache-Control "public, immutable";
-            try_files \$uri =404;
-        }
-        # SPA fallback
-        location / {
-            try_files \$uri \$uri/ /index.html;
-        }
-    }
-}
-NGINX_EOF
-    else
-        echo "[run] OpenConcho UI disabled — proxying / directly to Honcho API"
-        cat > "$nginx_conf" << NGINX_EOF
+    cat > /etc/nginx/nginx.conf << NGINX_EOF
 worker_processes auto;
 pid /run/nginx.pid;
 events { worker_connections 768; }
@@ -350,66 +264,20 @@ http {
         add_header Content-Security-Policy "frame-ancestors 'self'" always;
         ${auth_block}
         location / {
-            proxy_pass http://127.0.0.1:${API_PORT};
-            proxy_set_header Host \$host;
-            proxy_set_header X-Real-IP \$remote_addr;
-            proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-            proxy_set_header X-Forwarded-Proto \$scheme;
+            proxy_pass         http://127.0.0.1:${API_PORT};
+            proxy_set_header   Host \$host;
+            proxy_set_header   X-Real-IP \$remote_addr;
+            proxy_set_header   X-Forwarded-For \$proxy_add_x_forwarded_for;
+            proxy_set_header   X-Forwarded-Proto \$scheme;
             proxy_http_version 1.1;
-            proxy_set_header Upgrade \$http_upgrade;
-            proxy_set_header Connection "upgrade";
+            proxy_set_header   Upgrade \$http_upgrade;
+            proxy_set_header   Connection "upgrade";
         }
     }
 }
 NGINX_EOF
-    fi
 
-    # Patch OpenConcho index.html to load runtime config.js before the app
-    if [ -f "/var/www/openconcho/index.html" ]; then
-        if ! grep -q "config.js" /var/www/openconcho/index.html; then
-            sed -i 's|</head>|<script src="/config.js"></script></head>|' /var/www/openconcho/index.html
-            echo "[run] Patched index.html to load config.js"
-        fi
-    fi
-    # Safety dedup: remove duplicate location blocks that may survive Docker layer cache
-    # Uses python3 (guaranteed present) to parse and deduplicate
-    if [ -f "$nginx_conf" ]; then
-        python3 - "$nginx_conf" << 'DEDUP_EOF'
-import sys, re
-
-conf_file = sys.argv[1]
-with open(conf_file) as f:
-    content = f.read()
-
-# Remove duplicate location blocks: keep first occurrence of each location pattern
-seen = {}
-result = []
-block_re = re.compile(r'([ \t]*#[^\n]*\n)?[ \t]*location\s+(/[^\s{]*)\s*\{[^}]*\}', re.DOTALL)
-
-def dedup(text):
-    seen_locs = set()
-    out = []
-    pos = 0
-    for m in block_re.finditer(text):
-        loc = m.group(2)
-        if loc in seen_locs:
-            # Remove this block + preceding comment line
-            out.append(text[pos:m.start()])
-            pos = m.end()
-            print(f'[run] nginx dedup: removed duplicate location {loc}', file=sys.stderr)
-        else:
-            seen_locs.add(loc)
-    out.append(text[pos:])
-    return ''.join(out)
-
-new_content = dedup(content)
-if new_content != content:
-    with open(conf_file, 'w') as f:
-        f.write(new_content)
-    print('[run] nginx dedup: rewrote config to remove duplicates', file=sys.stderr)
-DEDUP_EOF
-    fi
-    nginx -t 2>&1 || { echo "[run] nginx config test FAILED"; cat "$nginx_conf"; exit 1; }
+    nginx -t 2>&1 || { echo "[run] nginx config test FAILED"; exit 1; }
     nginx
 }
 

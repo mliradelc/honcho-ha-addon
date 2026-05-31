@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented here. This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.28] - 2026-05-31
+
+### Fixed
+- **Deriver worker never started**: `run.sh` only launched the API server (`uvicorn`), leaving the deriver queue consumer absent. All 110+ queued work units were pending indefinitely — Honcho accumulated messages but never derived memory or built peer representations.
+  - `run.sh` now starts `python -m src.deriver` as a background process before handing over to uvicorn.
+  - Deriver log streamed to stdout (visible in HA log viewer) via `tail -F`.
+- **Deriver disabled by default**: `config.toml` template had `[deriver] enabled = false` — changed to `true` as the sensible default.
+
 ## [3.0.27] - 2026-05-30
 
 ### Fixed

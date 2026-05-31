@@ -3,7 +3,7 @@ ARG BUILD_FROM=ghcr.io/home-assistant/amd64-base-debian:bookworm
 
 # --- Stage 1: Build OpenConcho web SPA ---
 # Pinned to latest stable tag. Update OPENCONCHO_VERSION to upgrade.
-FROM node:22-alpine AS openconcho-builder
+FROM --platform=linux/amd64 node:22-alpine AS openconcho-builder
 
 ARG OPENCONCHO_VERSION=v0.12.1
 

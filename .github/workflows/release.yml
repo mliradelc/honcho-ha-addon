@@ -13,9 +13,41 @@ on:
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
 
 jobs:
+  pre-flight:
+    name: Static checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate config.yaml syntax
+        run: python3 -c "import yaml; yaml.safe_load(open('honcho/config.yaml'))"
+
+      - name: Check run.sh shell syntax
+        run: bash -n honcho/run.sh && echo "run.sh syntax OK"
+
+      - name: Check for duplicate nginx location blocks
+        run: |
+          COUNT=$(grep -c 'location /v3/' honcho/run.sh || true)
+          echo "Found $COUNT location /v3/ block(s)"
+          if [ "$COUNT" -gt 1 ]; then
+            echo "FAIL: duplicate location /v3/ blocks in run.sh"
+            exit 1
+          fi
+          echo "OK: no duplicate nginx location blocks"
+
+      - name: Validate Dockerfile syntax
+        run: |
+          docker run --rm -i hadolint/hadolint hadolint \
+            --ignore DL3008 --ignore DL3009 --ignore DL3015 \
+            --ignore SC2015 --ignore DL4006 \
+            - < honcho/Dockerfile && echo "Dockerfile OK" || true
+
   build-and-push:
+    name: Build (${{ matrix.arch }})
+    needs: pre-flight
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -24,7 +56,7 @@ jobs:
       matrix:
         arch: [amd64, aarch64]
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -66,11 +98,11 @@ jobs:
           tags: |
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}-${{ matrix.arch }}
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ matrix.arch }}
-          # Push single-arch images, not manifest lists
           provenance: false
           sbom: false
 
   create-manifest:
+    name: Create multi-arch manifest
     needs: build-and-push
     runs-on: ubuntu-latest
     permissions:
@@ -84,45 +116,34 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Create and push multi-arch manifest
-        id: manifest
         env:
           VERSION: ${{ github.event.release.tag_name || inputs.version }}
         run: |
           VERSION="${VERSION#v}"
 
-          # Each per-arch image is a single OCI manifest (provenance=false), so
-          # use --format '{{.Manifest.Digest}}' which works for both single manifests
-          # and manifest lists — unlike '{{json .}}.manifests[].digest' which only
-          # works for manifest lists.
           AMD64_DIGEST=$(docker buildx imagetools inspect \
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${VERSION}-amd64 \
             --format '{{.Manifest.Digest}}')
-
           AARCH64_DIGEST=$(docker buildx imagetools inspect \
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${VERSION}-aarch64 \
             --format '{{.Manifest.Digest}}')
 
-          echo "AMD64 digest:   $AMD64_DIGEST"
-          echo "AARCH64 digest: $AARCH64_DIGEST"
+          echo "AMD64:   $AMD64_DIGEST"
+          echo "AARCH64: $AARCH64_DIGEST"
 
-          # Validate digests look correct before using them
           if [[ "$AMD64_DIGEST" != sha256:* ]] || [[ "$AARCH64_DIGEST" != sha256:* ]]; then
-            echo "ERROR: Unexpected digest format — aborting manifest creation"
+            echo "ERROR: unexpected digest format — aborting"
             exit 1
           fi
 
-          # Create and push versioned multi-arch manifest
           docker manifest create \
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${VERSION} \
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${AMD64_DIGEST} \
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${AARCH64_DIGEST}
           docker manifest push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${VERSION}
 
-          # Create and push latest multi-arch manifest
           docker manifest create \
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest \
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${AMD64_DIGEST} \
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${AARCH64_DIGEST}
           docker manifest push ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
-
-          echo "Pushed multi-arch manifest: ${VERSION} and latest"

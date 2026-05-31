@@ -283,34 +283,6 @@ start_nginx() {
   }
 })();
 CFGEOF
-        # Inject runtime config so OpenConcho uses same-origin API calls
-        # instead of prompting the user to enter the server URL manually.
-        # runtimeConfig.ts reads window.__OPENCONCHO_DEFAULT_HONCHO_URL__;
-        # "same-origin" tells it to use location.origin (proxied via /v3/).
-        cat > /var/www/openconcho/config.js << 'CFGEOF'
-(function() {
-  // Seed localStorage so OpenConcho skips the "connect to server" setup screen.
-  // OpenConcho reads from localStorage['openconcho:instances'] — there is no
-  // window global injection API. Only runs if not already configured (safe for
-  // users who have changed their settings).
-  var KEY = 'openconcho:instances';
-  if (!localStorage.getItem(KEY)) {
-    // Detect HA ingress prefix (/hassio/ingress/<slug>).
-    // openapi-fetch concatenates baseUrl + "/v3/path" (string concat, not URL
-    // constructor), so the full ingress origin is the correct baseUrl — nginx
-    // inside the container then routes /v3/ to Honcho FastAPI.
-    var m = window.location.pathname.match(/^(\/hassio\/ingress\/[^\/]+)/);
-    var baseUrl = m
-      ? (window.location.origin + m[1])
-      : window.location.origin;
-    var id = 'ha-local';
-    localStorage.setItem(KEY, JSON.stringify({
-      instances: [{ id: id, name: 'Local Honcho', baseUrl: baseUrl, token: '' }],
-      activeId: id
-    }));
-  }
-})();
-CFGEOF
         # OpenConcho SPA at /, Honcho API proxied at /api/
         # The SPA connects to /api/ which nginx proxies to the Honcho FastAPI.
         # This eliminates browser CORS — everything is same-origin.
@@ -392,13 +364,6 @@ http {
 NGINX_EOF
     fi
 
-    # Patch OpenConcho index.html to load runtime config.js before the app
-    if [ -f "/var/www/openconcho/index.html" ]; then
-        if ! grep -q "config.js" /var/www/openconcho/index.html; then
-            sed -i 's|</head>|<script src="/config.js"></script></head>|' /var/www/openconcho/index.html
-            echo "[run] Patched index.html to load config.js"
-        fi
-    fi
     # Patch OpenConcho index.html to load runtime config.js before the app
     if [ -f "/var/www/openconcho/index.html" ]; then
         if ! grep -q "config.js" /var/www/openconcho/index.html; then

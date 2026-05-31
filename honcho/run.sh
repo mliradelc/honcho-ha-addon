@@ -118,11 +118,9 @@ sync_source() {
         cd "$src"
         if [ "$AUTO_UPDATE" = "true" ]; then
             echo "[run] Auto-updating Honcho source..."
-            # Discard generated/lock-file changes that block --ff-only pulls
-            git checkout -- uv.lock 2>/dev/null || true
-            git stash 2>/dev/null || true
-            git pull --ff-only 2>&1 || echo "[run] WARNING: git pull failed (local changes?)"
-            git stash pop 2>/dev/null || true
+            # Hard-reset to origin to discard any local changes (uv.lock, .pth files, etc.)
+            git fetch origin 2>&1
+            git reset --hard origin/"${GIT_REF:-main}" 2>&1 || echo "[run] WARNING: git reset failed"
         fi
         if [ -n "$GIT_REF" ]; then
             git checkout "$GIT_REF" 2>/dev/null || true

@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented here. This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.31] - 2026-05-31
+
+### Fixed
+- **Dialectic missing credentials** (`AuthenticationError` — connecting to OpenAI instead of
+  configured endpoint): `apply_llm_config()` was setting `TRANSPORT` and `MODEL` for each
+  dialectic level but omitting `OVERRIDES__BASE_URL` and `OVERRIDES__API_KEY`. Without these,
+  Honcho's pydantic-settings fell through to the OpenAI default, ignoring `llm_base_url` and
+  `llm_api_key` from the add-on config. All five levels (minimal/low/medium/high/max) now
+  receive the full four-field override block, matching the deriver/summary/dream subsystems.
+  This fixes `honcho_reasoning` and `honcho_profile` (peer card) returning empty results.
+
 ## [3.0.30] - 2026-05-31
 
 ### Fixed

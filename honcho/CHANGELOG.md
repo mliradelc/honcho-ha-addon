@@ -2,6 +2,24 @@
 
 All notable changes to this project will be documented here. This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.33] - 2026-05-31
+
+### Fixed
+- **OpenConcho web UI not loading** when clicking "Open Web UI" in the HA add-on page.
+  Three changes in `run.sh`:
+  1. **Runtime config injection**: writes `/var/www/openconcho/config.js` at startup
+     with `window.__OPENCONCHO_DEFAULT_HONCHO_URL__ = "same-origin"`. OpenConcho's
+     `runtimeConfig.ts` reads this global to set its default API base URL — without it,
+     the SPA showed a blank setup screen (no URL pre-configured) or tried to reach
+     `http://localhost:8000` from the user's browser.
+  2. **Same-origin `/v3/` proxy**: adds a `location /v3/` block to the nginx config
+     so browser API calls to `/v3/...` are forwarded to the local Honcho FastAPI
+     (`http://127.0.0.1:{API_PORT}/v3/`). Required because `"same-origin"` instructs
+     OpenConcho to send requests to the page's own origin.
+  3. **`<script>` tag injection**: patches `index.html` at startup to load
+     `/config.js` before the app bundle, ensuring the runtime URL is available when
+     the SPA initialises.
+
 ## [3.0.32] - 2026-05-31
 
 ### Fixed

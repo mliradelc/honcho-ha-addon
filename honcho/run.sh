@@ -261,15 +261,26 @@ start_nginx() {
         # "same-origin" tells it to use location.origin (proxied via /v3/).
         cat > /var/www/openconcho/config.js << 'CFGEOF'
 (function() {
-  // Auto-detect HA ingress vs direct LAN access.
-  // HA ingress URL: /hassio/ingress/<slug>/...
-  // In ingress mode the SPA must prefix API calls with the ingress path so
-  // they route back through the HA proxy. In direct mode nginx /v3/ handles it.
-  var path = window.location.pathname;
-  var m = path.match(/^(\/hassio\/ingress\/[^\/]+)/);
-  window.__OPENCONCHO_DEFAULT_HONCHO_URL__ = m
-    ? window.location.origin + m[1]
-    : "same-origin";
+  // Seed localStorage so OpenConcho skips the "connect to server" setup screen.
+  // OpenConcho reads from localStorage['openconcho:instances'] — there is no
+  // window global injection API. Only runs if not already configured (safe for
+  // users who have changed their settings).
+  var KEY = 'openconcho:instances';
+  if (!localStorage.getItem(KEY)) {
+    // Detect HA ingress prefix (/hassio/ingress/<slug>).
+    // openapi-fetch concatenates baseUrl + "/v3/path" (string concat, not URL
+    // constructor), so the full ingress origin is the correct baseUrl — nginx
+    // inside the container then routes /v3/ to Honcho FastAPI.
+    var m = window.location.pathname.match(/^(\/hassio\/ingress\/[^\/]+)/);
+    var baseUrl = m
+      ? (window.location.origin + m[1])
+      : window.location.origin;
+    var id = 'ha-local';
+    localStorage.setItem(KEY, JSON.stringify({
+      instances: [{ id: id, name: 'Local Honcho', baseUrl: baseUrl, token: '' }],
+      activeId: id
+    }));
+  }
 })();
 CFGEOF
         # Inject runtime config so OpenConcho uses same-origin API calls
@@ -278,15 +289,26 @@ CFGEOF
         # "same-origin" tells it to use location.origin (proxied via /v3/).
         cat > /var/www/openconcho/config.js << 'CFGEOF'
 (function() {
-  // Auto-detect HA ingress vs direct LAN access.
-  // HA ingress URL: /hassio/ingress/<slug>/...
-  // In ingress mode the SPA must prefix API calls with the ingress path so
-  // they route back through the HA proxy. In direct mode nginx /v3/ handles it.
-  var path = window.location.pathname;
-  var m = path.match(/^(\/hassio\/ingress\/[^\/]+)/);
-  window.__OPENCONCHO_DEFAULT_HONCHO_URL__ = m
-    ? window.location.origin + m[1]
-    : "same-origin";
+  // Seed localStorage so OpenConcho skips the "connect to server" setup screen.
+  // OpenConcho reads from localStorage['openconcho:instances'] — there is no
+  // window global injection API. Only runs if not already configured (safe for
+  // users who have changed their settings).
+  var KEY = 'openconcho:instances';
+  if (!localStorage.getItem(KEY)) {
+    // Detect HA ingress prefix (/hassio/ingress/<slug>).
+    // openapi-fetch concatenates baseUrl + "/v3/path" (string concat, not URL
+    // constructor), so the full ingress origin is the correct baseUrl — nginx
+    // inside the container then routes /v3/ to Honcho FastAPI.
+    var m = window.location.pathname.match(/^(\/hassio\/ingress\/[^\/]+)/);
+    var baseUrl = m
+      ? (window.location.origin + m[1])
+      : window.location.origin;
+    var id = 'ha-local';
+    localStorage.setItem(KEY, JSON.stringify({
+      instances: [{ id: id, name: 'Local Honcho', baseUrl: baseUrl, token: '' }],
+      activeId: id
+    }));
+  }
 })();
 CFGEOF
         # OpenConcho SPA at /, Honcho API proxied at /api/

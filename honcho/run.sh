@@ -371,6 +371,44 @@ NGINX_EOF
             echo "[run] Patched index.html to load config.js"
         fi
     fi
+    # Safety dedup: remove duplicate location blocks that may survive Docker layer cache
+    # Uses python3 (guaranteed present) to parse and deduplicate
+    if [ -f "$nginx_conf" ]; then
+        python3 - "$nginx_conf" << 'DEDUP_EOF'
+import sys, re
+
+conf_file = sys.argv[1]
+with open(conf_file) as f:
+    content = f.read()
+
+# Remove duplicate location blocks: keep first occurrence of each location pattern
+seen = {}
+result = []
+block_re = re.compile(r'([ \t]*#[^\n]*\n)?[ \t]*location\s+(/[^\s{]*)\s*\{[^}]*\}', re.DOTALL)
+
+def dedup(text):
+    seen_locs = set()
+    out = []
+    pos = 0
+    for m in block_re.finditer(text):
+        loc = m.group(2)
+        if loc in seen_locs:
+            # Remove this block + preceding comment line
+            out.append(text[pos:m.start()])
+            pos = m.end()
+            print(f'[run] nginx dedup: removed duplicate location {loc}', file=sys.stderr)
+        else:
+            seen_locs.add(loc)
+    out.append(text[pos:])
+    return ''.join(out)
+
+new_content = dedup(content)
+if new_content != content:
+    with open(conf_file, 'w') as f:
+        f.write(new_content)
+    print('[run] nginx dedup: rewrote config to remove duplicates', file=sys.stderr)
+DEDUP_EOF
+    fi
     nginx -t 2>&1 || { echo "[run] nginx config test FAILED"; cat "$nginx_conf"; exit 1; }
     nginx
 }

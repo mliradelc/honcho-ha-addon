@@ -2,6 +2,35 @@
 
 All notable changes to this project will be documented here. This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.30] - 2026-05-31
+
+### Fixed
+- `sync_source()` in `run.sh` now uses `git fetch && git reset --hard origin/main` instead
+  of `git stash / git pull / git stash pop`. The stash approach failed silently when the
+  source directory had uncommitted modifications (editable-install `.pth` files, `uv.lock`
+  changes) — leaving the container running stale code despite reporting a successful update.
+  Hard reset guarantees a clean working tree on every startup.
+
+## [3.0.29] - 2026-05-31
+
+### Fixed
+- Added `git checkout -- uv.lock` before `git pull` in `sync_source()` to prevent the
+  `Your local changes … would be overwritten` error that blocked auto-update when
+  `uv pip install -e .` modified `uv.lock` as a side effect of the editable install.
+
+## [3.0.28] - 2026-05-31
+
+### Fixed
+- **Deriver worker never started**: `run.sh` now launches `python -m src.deriver` as a
+  background process before starting Uvicorn. Previously the deriver process was never
+  spawned — all conversation work units were queued but never consumed, leaving Honcho
+  memory permanently empty.
+- **Deriver disabled by default**: `config.toml` template now sets `enabled = true` for
+  the deriver section. The upstream default (`enabled = false`) silently suppressed memory
+  extraction even if the process had been started.
+- Deriver log is now tailed to stdout so it appears in the HA add-on log viewer alongside
+  the rest of the add-on output.
+
 ## [3.0.27] - 2026-05-30
 
 ### Fixed

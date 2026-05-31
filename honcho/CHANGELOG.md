@@ -1,3 +1,9 @@
+## [3.0.40] - 2026-05-31
+### Changed
+- OpenConcho removed from this add-on. Use the new standalone OpenConcho add-on.
+- Dockerfile cleaned: no more multi-stage OpenConcho builder (faster builds).
+- nginx restored to simple pass-through — no duplicate locations, no crash.
+
 # Changelog
 
 ## [3.0.39] — 2026-05-31

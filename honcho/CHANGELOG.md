@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented here. This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.35] - 2026-05-31
+### Fixed
+- OpenConcho Web UI: `config.js` now auto-detects HA ingress prefix at runtime.
+  When accessed via Home Assistant's ingress (`/hassio/ingress/<slug>/`), API calls
+  are prefixed with the ingress path so they route back through the HA proxy.
+  Direct LAN access (`http://<ip>:49170/`) continues to work via `same-origin`.
+
 ## [3.0.34] - 2026-05-31
 
 ### Fixed

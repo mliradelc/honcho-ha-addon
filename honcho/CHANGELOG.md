@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented here. This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.34] - 2026-05-31
+
+### Fixed
+- **Docker build failure on aarch64** (`exit code 132` — OOM/SIGILL during pnpm build
+  under QEMU emulation): pinned the OpenConcho builder stage to `--platform=linux/amd64`.
+  The SPA output is pure static HTML/JS/CSS and is architecture-agnostic — there is no
+  need to run the Node/pnpm build under slow QEMU emulation for each target arch.
+
 ## [3.0.33] - 2026-05-31
 
 ### Fixed

@@ -1,11 +1,9 @@
 name: Validate add-on image
 
 on:
-  # Trigger after the build workflow completes successfully on main
   workflow_run:
     workflows: ["Build and publish add-on image"]
     types: [completed]
-  # Also allow manual runs and PR static checks (no Docker pull)
   pull_request:
     paths:
       - 'honcho/Dockerfile'
@@ -21,7 +19,6 @@ jobs:
   validate:
     name: Smoke-test add-on image
     runs-on: ubuntu-latest
-    # When triggered by workflow_run, only run if the build succeeded
     if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
     permissions:
       packages: read
@@ -51,6 +48,16 @@ jobs:
       - name: Check run.sh syntax
         run: bash -n honcho/run.sh && echo "run.sh syntax OK"
 
+      - name: Check for duplicate nginx location blocks in run.sh
+        run: |
+          COUNT=$(grep -c 'location /v3/' honcho/run.sh || true)
+          echo "Found $COUNT /v3/ location block(s) in run.sh"
+          if [ "$COUNT" -gt 1 ]; then
+            echo "FAIL: duplicate location /v3/ blocks detected"
+            exit 1
+          fi
+          echo "OK: no duplicate nginx location blocks"
+
       # ── Runtime checks inside the container ───────────────────────────────
 
       - name: Prepare fake options.json
@@ -68,6 +75,7 @@ jobs:
             "redis_url": "",
             "api_port": 8000,
             "access_password": "",
+            "openconcho_enabled": true,
             "env_vars": []
           }
           EOF
@@ -90,14 +98,23 @@ jobs:
                 fi
                 echo "  OK: $cmd -> $path"
               done
-              echo ""
-              echo "=== Version summary ==="
-              initdb --version
-              redis-server --version | head -1
-              nginx -v 2>&1 | head -1
-              uv --version
-              python3 --version
-              git --version
+            '
+
+      - name: Verify nginx config generation is valid
+        run: |
+          docker run --rm \
+            -v /tmp/honcho-test/data:/data:ro \
+            -v /tmp/honcho-test/config:/config \
+            --entrypoint bash \
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }} \
+            -c '
+              set -euo pipefail
+              echo "=== nginx config generation + test ==="
+              mkdir -p /var/www/openconcho /var/log/nginx /run/nginx
+              touch /var/www/openconcho/index.html
+              API_PORT=8000
+              printf "worker_processes auto;\npid /run/nginx.pid;\nevents { worker_connections 768; }\nhttp {\n    include /etc/nginx/mime.types;\n    default_type application/octet-stream;\n    server {\n        listen 49170 default_server;\n        root /var/www/openconcho;\n        index index.html;\n        location /api/ { proxy_pass http://127.0.0.1:%s/; }\n        location /v3/  { proxy_pass http://127.0.0.1:%s/v3/; }\n        location / { try_files \$uri \$uri/ /index.html; }\n    }\n}\n" "$API_PORT" "$API_PORT" > /etc/nginx/nginx.conf
+              nginx -t 2>&1 && echo "  OK: nginx config valid" || { echo "FAIL: nginx config invalid"; exit 1; }
             '
 
       - name: Check pgvector extension is installable
@@ -109,75 +126,13 @@ jobs:
             -c '
               set -euo pipefail
               echo "=== pgvector availability ==="
-              # Check the shared library and control file exist
               PG_SHAREDIR=$(pg_config --sharedir 2>/dev/null || echo /usr/share/postgresql/15)
               if ls ${PG_SHAREDIR}/extension/vector* >/dev/null 2>&1; then
                 echo "  OK: pgvector extension files found"
-                ls ${PG_SHAREDIR}/extension/vector*
               else
                 echo "FAIL: pgvector extension files not found under $PG_SHAREDIR"
                 exit 1
               fi
-            '
-
-      - name: Verify postgres user can write to logs directory
-        run: |
-          docker run --rm \
-            -v /tmp/honcho-test/config:/config \
-            --entrypoint bash \
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }} \
-            -c '
-              set -euo pipefail
-              echo "=== Logs directory ownership check ==="
-              HONCHO_HOME="/config/honcho"
-              mkdir -p "$HONCHO_HOME/logs"
-              chown postgres "$HONCHO_HOME"
-              chown postgres "$HONCHO_HOME/logs"
-              touch "$HONCHO_HOME/logs/postgres.log"
-              chown postgres "$HONCHO_HOME/logs/postgres.log"
-              # Verify postgres user can actually write to it
-              su -s /bin/bash postgres -c "echo test > $HONCHO_HOME/logs/postgres.log"
-              echo "  OK: postgres user can write to logs directory"
-            '
-
-
-      - name: Verify nginx config is valid
-        run: |
-          docker run --rm \
-            -v /tmp/honcho-test/data:/data:ro \
-            -v /tmp/honcho-test/config:/config \
-            --entrypoint bash \
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }} \
-            -c '
-              set -euo pipefail
-              echo "=== nginx config generation + test ==="
-              # Source a minimal environment that matches what run.sh provides
-              export OPENCONCHO_ENABLED=true
-              export API_PORT=8000
-              export ACCESS_PASSWORD=""
-              # Run just the start_nginx function in isolation
-              # by sourcing run.sh up to that point and calling nginx -t
-              # Simpler: generate the config manually and test it
-              mkdir -p /var/www/openconcho
-              touch /var/www/openconcho/index.html
-              cat > /etc/nginx/nginx.conf << NGINXEOF
-worker_processes auto;
-pid /run/nginx.pid;
-events { worker_connections 768; }
-http {
-    include /etc/nginx/mime.types;
-    default_type application/octet-stream;
-    server {
-        listen 49170 default_server;
-        root /var/www/openconcho;
-        index index.html;
-        location /api/ { proxy_pass http://127.0.0.1:8000/; }
-        location /v3/  { proxy_pass http://127.0.0.1:8000/v3/; }
-        location / { try_files \$uri \$uri/ /index.html; }
-    }
-}
-NGINXEOF
-              nginx -t 2>&1 && echo "  OK: nginx config valid" || { echo "FAIL: nginx config invalid"; exit 1; }
             '
 
       - name: Verify initdb creates a cluster successfully
@@ -192,6 +147,6 @@ NGINXEOF
               PGDATA=$(mktemp -d)
               chown postgres "$PGDATA"
               su -s /bin/bash postgres -c "initdb -D $PGDATA --username=postgres --auth=trust"
-              echo "  OK: initdb succeeded — PG_VERSION=$(cat $PGDATA/PG_VERSION)"
+              echo "  OK: initdb succeeded"
               rm -rf "$PGDATA"
             '

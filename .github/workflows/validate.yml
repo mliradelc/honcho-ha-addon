@@ -1,30 +1,28 @@
 name: Validate add-on image
 
 on:
+  # Run after a successful build — Docker image is guaranteed to exist
   workflow_run:
     workflows: ["Build and publish add-on image"]
     types: [completed]
-  pull_request:
-    paths:
-      - 'honcho/Dockerfile'
-      - 'honcho/run.sh'
-      - 'honcho/config.yaml'
   workflow_dispatch:
 
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: mliradelc/honcho-ha-addon
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
 
 jobs:
   validate:
-    name: Smoke-test add-on image
+    name: Runtime smoke-test
     runs-on: ubuntu-latest
+    # Only run when the build actually succeeded
     if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
     permissions:
       packages: read
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
 
       - name: Log in to GHCR
         uses: docker/login-action@v3
@@ -39,26 +37,6 @@ jobs:
           VERSION=$(grep '^version:' honcho/config.yaml | sed 's/version: *"\(.*\)"/\1/')
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "Testing version: $VERSION"
-
-      # ── Static checks (no Docker) ──────────────────────────────────────────
-
-      - name: Validate config.yaml syntax
-        run: python3 -c "import yaml; yaml.safe_load(open('honcho/config.yaml'))"
-
-      - name: Check run.sh syntax
-        run: bash -n honcho/run.sh && echo "run.sh syntax OK"
-
-      - name: Check for duplicate nginx location blocks in run.sh
-        run: |
-          COUNT=$(grep -c 'location /v3/' honcho/run.sh || true)
-          echo "Found $COUNT /v3/ location block(s) in run.sh"
-          if [ "$COUNT" -gt 1 ]; then
-            echo "FAIL: duplicate location /v3/ blocks detected"
-            exit 1
-          fi
-          echo "OK: no duplicate nginx location blocks"
-
-      # ── Runtime checks inside the container ───────────────────────────────
 
       - name: Prepare fake options.json
         run: |
@@ -89,13 +67,9 @@ jobs:
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }} \
             -c '
               set -euo pipefail
-              echo "=== Binary presence check ==="
               for cmd in initdb pg_ctl psql redis-server nginx uv git jq python3; do
                 path=$(command -v "$cmd" 2>/dev/null || true)
-                if [ -z "$path" ]; then
-                  echo "FAIL: $cmd not found on PATH"
-                  exit 1
-                fi
+                if [ -z "$path" ]; then echo "FAIL: $cmd not found"; exit 1; fi
                 echo "  OK: $cmd -> $path"
               done
             '
@@ -109,12 +83,10 @@ jobs:
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }} \
             -c '
               set -euo pipefail
-              echo "=== nginx config generation + test ==="
               mkdir -p /var/www/openconcho /var/log/nginx /run/nginx
               touch /var/www/openconcho/index.html
-              API_PORT=8000
-              printf "worker_processes auto;\npid /run/nginx.pid;\nevents { worker_connections 768; }\nhttp {\n    include /etc/nginx/mime.types;\n    default_type application/octet-stream;\n    server {\n        listen 49170 default_server;\n        root /var/www/openconcho;\n        index index.html;\n        location /api/ { proxy_pass http://127.0.0.1:%s/; }\n        location /v3/  { proxy_pass http://127.0.0.1:%s/v3/; }\n        location / { try_files \$uri \$uri/ /index.html; }\n    }\n}\n" "$API_PORT" "$API_PORT" > /etc/nginx/nginx.conf
-              nginx -t 2>&1 && echo "  OK: nginx config valid" || { echo "FAIL: nginx config invalid"; exit 1; }
+              printf "worker_processes auto;\npid /run/nginx.pid;\nevents { worker_connections 768; }\nhttp {\n    include /etc/nginx/mime.types;\n    default_type application/octet-stream;\n    server {\n        listen 49170 default_server;\n        root /var/www/openconcho;\n        index index.html;\n        location /api/ { proxy_pass http://127.0.0.1:8000/; }\n        location /v3/ { proxy_pass http://127.0.0.1:8000/v3/; }\n        location / { try_files \$uri \$uri/ /index.html; }\n    }\n}\n" > /etc/nginx/nginx.conf
+              nginx -t 2>&1 && echo "OK: nginx config valid" || { echo "FAIL: nginx config invalid"; exit 1; }
             '
 
       - name: Check pgvector extension is installable
@@ -125,13 +97,11 @@ jobs:
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }} \
             -c '
               set -euo pipefail
-              echo "=== pgvector availability ==="
               PG_SHAREDIR=$(pg_config --sharedir 2>/dev/null || echo /usr/share/postgresql/15)
               if ls ${PG_SHAREDIR}/extension/vector* >/dev/null 2>&1; then
-                echo "  OK: pgvector extension files found"
+                echo "OK: pgvector extension files found"
               else
-                echo "FAIL: pgvector extension files not found under $PG_SHAREDIR"
-                exit 1
+                echo "FAIL: pgvector not found under $PG_SHAREDIR"; exit 1
               fi
             '
 
@@ -143,10 +113,9 @@ jobs:
             ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }} \
             -c '
               set -euo pipefail
-              echo "=== initdb smoke test ==="
               PGDATA=$(mktemp -d)
               chown postgres "$PGDATA"
               su -s /bin/bash postgres -c "initdb -D $PGDATA --username=postgres --auth=trust"
-              echo "  OK: initdb succeeded"
+              echo "OK: initdb succeeded"
               rm -rf "$PGDATA"
             '

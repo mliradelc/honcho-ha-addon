@@ -196,7 +196,7 @@ default_max_tokens = ${DEFAULT_MAX_TOKENS:-4096}
 vector_dimensions = ${target_dims}
 
 [deriver]
-enabled = ${DERIVER_ENABLED:-false}
+enabled = ${DERIVER_ENABLED:-true}
 workers = ${DERIVER_WORKERS:-2}
 polling_sleep_interval_seconds = ${POLL_INTERVAL:-30}
 CONFIG_EOF
@@ -455,6 +455,14 @@ echo "[run] Starting Honcho FastAPI on 0.0.0.0:${API_PORT}..."
 
 cd "$HONCHO_HOME/source"
 source "$HONCHO_HOME/venv/bin/activate"
+
+# Start the deriver worker in the background (queue consumer for memory extraction)
+echo "[run] Starting Honcho deriver worker..."
+python -m src.deriver >> "$HONCHO_HOME/logs/deriver.log" 2>&1 &
+DERIVER_PID=$!
+echo "[run] Deriver PID: $DERIVER_PID"
+# Stream deriver log to stdout so entries appear in HA log viewer
+tail -F "$HONCHO_HOME/logs/deriver.log" &
 
 exec uvicorn src.main:app \
     --host 0.0.0.0 \

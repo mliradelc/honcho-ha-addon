@@ -9,24 +9,27 @@ jobs:
   check-updates:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
+
       - name: Fetch latest Redis version
         id: redis
         run: |
           LATEST=$(curl -s https://api.github.com/repos/redis/redis/releases \
             | jq -r '[.[] | select(.prerelease==false)][0].tag_name')
           echo "version=$LATEST" >> $GITHUB_OUTPUT
+
       - name: Fetch latest pgvector version
         id: pgvector
         run: |
           LATEST=$(curl -s https://api.github.com/repos/pgvector/pgvector/releases \
             | jq -r '[.[] | select(.prerelease==false)][0].tag_name')
           echo "version=$LATEST" >> $GITHUB_OUTPUT
+
       - name: Compare with recorded versions
         run: |
+          echo "=== Recorded versions ==="
           cat honcho/.upstream-versions.json
-          echo "Redis latest: ${{ steps.redis.outputs.version }}"
-          echo "pgvector latest: ${{ steps.pgvector.outputs.version }}"
-      - name: Create PR if versions differ
-        if: false
-        run: echo "PR automation not yet implemented"
+          echo ""
+          echo "=== Latest upstream ==="
+          echo "Redis:    ${{ steps.redis.outputs.version }}"
+          echo "pgvector: ${{ steps.pgvector.outputs.version }}"

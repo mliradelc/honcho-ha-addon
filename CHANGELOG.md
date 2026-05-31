@@ -2,6 +2,11 @@
 
 All notable changes to this project will be documented here. This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.29] - 2026-05-31
+
+### Fixed
+- Auto-update git pull blocked by modified `uv.lock` in source dir; now discarded with `git checkout -- uv.lock` before stash/pull.
+
 ## [3.0.28] - 2026-05-31
 
 ### Fixed

@@ -1,5 +1,12 @@
 # Changelog
 
+## [3.0.38] - 2026-05-31
+### Fixed
+- Remove duplicate `location /v3/` block in nginx config (caused nginx config test failure and add-on crash at startup)
+- Remove duplicate `config.js` write block in `start_nginx()`
+- Remove duplicate `index.html` patch block in `start_nginx()`
+
+
 All notable changes to this project will be documented here. This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [3.0.37] - 2026-05-31

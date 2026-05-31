@@ -1,0 +1,20 @@
+name: OpenConcho
+description: Web UI for your local Honcho memory instance
+version: "1.0.0"
+slug: openconcho
+url: https://github.com/mliradelc/honcho-ha-addon
+arch:
+  - amd64
+  - aarch64
+ingress: true
+ingress_port: 49180
+panel_icon: mdi:brain
+panel_title: OpenConcho
+homeassistant_api: false
+hassio_api: false
+options:
+  honcho_url: "http://homeassistant:8000"
+  access_password: ""
+schema:
+  honcho_url: str
+  access_password: str

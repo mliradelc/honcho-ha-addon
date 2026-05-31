@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented here. This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.37] - 2026-05-31
+### Fixed
+- nginx crash on startup: removed duplicate `location /v3/` block in `run.sh`
+  (introduced by the 3.0.35 patch which appended instead of replacing).
+### Improved
+- Smoke test (`validate.yml`) now generates and validates the nginx config with
+  `nginx -t` inside the container, so config syntax errors are caught before
+  the image is marked good.
+
 ## [3.0.36] - 2026-05-31
 ### Fixed
 - OpenConcho Web UI: config.js now seeds `localStorage['openconcho:instances']`

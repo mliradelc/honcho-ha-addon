@@ -20,7 +20,7 @@ jobs:
     name: Static checks
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Validate config.yaml syntax
         run: python3 -c "import yaml; yaml.safe_load(open('openconcho/config.yaml'))"
@@ -68,7 +68,7 @@ jobs:
       matrix:
         arch: [amd64, aarch64]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3

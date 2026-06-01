@@ -28,6 +28,26 @@ jobs:
       - name: Check run.sh shell syntax
         run: bash -n openconcho/run.sh && echo "run.sh syntax OK"
 
+      - name: Enforce no runtime builds in run.sh
+        run: |
+          # OpenConcho SPA is built in CI (Dockerfile). run.sh must never build at runtime.
+          if grep -Eq '(npm|pnpm|yarn|node|webpack|vite|tsc|build|corepack)' openconcho/run.sh; then
+            echo "FAIL: openconcho/run.sh contains a build-time command."
+            echo "The SPA must be built in CI (Dockerfile), not on the HA server."
+            grep -En '(npm|pnpm|yarn|node|webpack|vite|tsc|build|corepack)' openconcho/run.sh
+            exit 1
+          fi
+          echo "OK: no runtime build commands in run.sh"
+
+      - name: Confirm image field is set in config.yaml
+        run: |
+          if ! grep -q '^image:' openconcho/config.yaml; then
+            echo "FAIL: openconcho/config.yaml is missing the 'image:' field."
+            echo "Without it, HA Supervisor will attempt a local Docker build."
+            exit 1
+          fi
+          echo "OK: image field present — $(grep '^image:' openconcho/config.yaml)"
+
   build-and-push:
     name: Build (${{ matrix.arch }})
     needs: pre-flight

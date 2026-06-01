@@ -100,7 +100,7 @@ jobs:
           esac
 
       - name: Build and push per-arch image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: ./openconcho
           file: ./openconcho/Dockerfile

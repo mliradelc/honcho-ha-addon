@@ -35,7 +35,7 @@ Modelled on [`hermes-ha-addon`](https://github.com/WolframRavenwolf/hermes-ha-ad
 | `redis_url` | _(empty)_ | `redis://…` URL when `redis_mode: external`. |
 | `api_port` | `8000` | Internal port the Honcho FastAPI app listens on. |
 | `access_password` | _(empty)_ | If set, nginx basic-auth on ingress. |
-| `env_vars` | `[]` | List of `{name, value}` pairs injected into Honcho's `.env`. |
+| `env_vars` | `[]` | List of `{name, value}` pairs injected into Honcho's `.env`. **Recommended for self-hosted deployments:** add these entries to enable memory extraction, card generation, summaries, deduction, and induction (all disabled by upstream defaults): |
 
 ## Architecture
 
@@ -74,7 +74,31 @@ To trigger a new build: create a GitHub Release with a tag matching the `version
 
 ## Hermes integration
 
-This add-on pairs with [Hermes Agent](https://github.com/NousResearch/hermes-agent)'s `memory.provider: honcho` setting. Point Hermes at `http://homeassistant.local:49170/` (ingress) or the direct port if configured.
+### Recommended env_vars for self-hosted
+
+Honcho's upstream defaults disable memory extraction, peer card generation, summaries, deduction, and induction — these are designed for high-throughput cloud deployments. Self-hosted add‑ons must enable them explicitly. Add the following entries under `env_vars` in the add‑on configuration:
+
+```yaml
+env_vars:
+  - name: DERIVER_FLUSH_ENABLED
+    value: "true"
+  - name: PEER_CARD_ENABLED
+    value: "true"
+  - name: SUMMARY_ENABLED
+    value: "true"
+  - name: DREAM_ENABLED
+    value: "true"
+  - name: DREAM_SURPRISAL__ENABLED
+    value: "true"
+  - name: EMBEDDING_VECTOR_DIMENSIONS
+    value: "4096"
+  - name: EMBEDDING_DIMENSIONS_MODE
+    value: "never"
+```
+
+These are **injected into the container automatically at every boot** (the `run.sh` appends them to Honcho's `.env`), so they cannot be lost across restarts or updates. The `DREAM_*` flags enable the induction/abduction/consolidation reasoning layers.
+
+This add-on pairs with [Hermes Agent](https://github.com/NousResearch/hermes-agent)'s `memory.provider: honcho` setting. Point Hermes at `http://homeassistant.local:8000` (internal Honcho API).
 
 ## License
 

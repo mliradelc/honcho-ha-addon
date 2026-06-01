@@ -1,12 +1,13 @@
 name: OpenConcho
 description: Web UI for your local Honcho memory instance
-version: "1.0.1"
+version: "1.0.2"
 slug: openconcho
 url: https://github.com/mliradelc/honcho-ha-addon
 image: ghcr.io/mliradelc/honcho-ha-addon/openconcho
 arch:
   - amd64
   - aarch64
+init: false
 ingress: true
 ingress_port: 49180
 panel_icon: mdi:brain

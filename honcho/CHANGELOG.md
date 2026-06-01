@@ -6,6 +6,11 @@
 
 # Changelog
 
+## [3.0.41]
+### Fixed
+- run.sh: nginx auth_block variable initialised as empty string (was corrupted to literal `***`, causing nginx `unknown directive` crash on every startup when no access_password is set)
+
+
 ## [3.0.39] — 2026-05-31
 ### Fixed
 - Add runtime nginx dedup guard: duplicate `location /v3/` blocks (caused by Docker layer

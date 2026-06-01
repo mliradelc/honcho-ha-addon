@@ -241,7 +241,7 @@ PGSQL
 start_nginx() {
     echo "[run] Starting nginx..."
 
-    local auth_block=***
+    local auth_block=""
     if [ -n "$ACCESS_PASSWORD" ]; then
         echo "[run] Enabling basic auth..."
         local htpasswd_file="$HONCHO_HOME/.htpasswd"

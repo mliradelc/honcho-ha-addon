@@ -48,6 +48,15 @@ jobs:
           fi
           echo "OK: image field present — $(grep '^image:' openconcho/config.yaml)"
 
+      - name: Confirm init:false is set in config.yaml
+        run: |
+          if ! grep -q '^init: false' openconcho/config.yaml; then
+            echo "FAIL: openconcho/config.yaml is missing 'init: false'."
+            echo "Without it, HA Supervisor runs its own init and clashes with s6-overlay (PID 1 error)."
+            exit 1
+          fi
+          echo "OK: init: false present"
+
   build-and-push:
     name: Build (${{ matrix.arch }})
     needs: pre-flight

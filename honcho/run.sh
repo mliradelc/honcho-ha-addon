@@ -392,6 +392,20 @@ apply_llm_config() {
 }
 apply_llm_config
 
+# Required deriver feature flags for single-user self-hosted deployments.
+# Honcho defaults these to false (designed for high-throughput SaaS).
+# Without them, low-volume deployments never trigger memory extraction
+# because the token batch threshold (~1,000 tokens) is never reached.
+# See: https://github.com/plastic-labs/honcho/issues/494
+cat >> "$HONCHO_HOME/.env" << 'DERIVER_FEATURES'
+DERIVER_FLUSH_ENABLED=true
+PEER_CARD_ENABLED=true
+SUMMARY_ENABLED=true
+DREAM_ENABLED=true
+DREAM_SURPRISAL__ENABLED=true
+DERIVER_FEATURES
+echo "[run] Deriver feature flags appended to .env"
+
 # 3. Sync source and install dependencies, then migrate
 sync_source
 ensure_installed

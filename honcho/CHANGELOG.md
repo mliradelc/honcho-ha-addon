@@ -1,3 +1,8 @@
+## [3.0.43] - 2026-06-06
+
+### Fixed
+- Migration failure
+
 ## [3.0.40] - 2026-05-31
 ### Changed
 - OpenConcho removed from this add-on. Use the new standalone OpenConcho add-on.

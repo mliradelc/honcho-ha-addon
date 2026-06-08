@@ -1,3 +1,8 @@
+## [3.0.45] (2026-06-09)
+### Fixed
+- Deriver health checks and sync reliability improvements
+
+
 ## [3.0.40] - 2026-05-31
 ### Changed
 - OpenConcho removed from this add-on. Use the new standalone OpenConcho add-on.

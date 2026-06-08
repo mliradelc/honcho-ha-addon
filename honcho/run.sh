@@ -443,4 +443,26 @@ exec uvicorn src.main:app \
     --port "$API_PORT" \
     --log-level info \
     --proxy-headers \
+
+# --- Honcho Auth Fallbacks (Watchdog patch) ---
+if [ -z "${DIALECTIC_LEVELS__minimal__MODEL_CONFIG__TRANSPORT:-}" ]; then
+    export DIALECTIC_LEVELS__minimal__MODEL_CONFIG__TRANSPORT="${LLM_TRANSPORT:-openai}"
+fi
+if [ -z "${DIALECTIC_LEVELS__minimal__MODEL_CONFIG__MODEL:-}" ]; then
+    export DIALECTIC_LEVELS__minimal__MODEL_CONFIG__MODEL="${LLM_MODEL:-gpt-4o-mini}"
+fi
+if [ -f "/data/options.json" ] && [ -z "${LLM_OPENAI_API_KEY:-}" ]; then
+    try_token=$(python3 -c "import json,os;p='/data/options.json';print(json.load(open(p)).get('homeassistant_token',''))if os.path.exists(p)else'')" 2>/dev/null || echo "")
+    if [ -n "$try_token" ]; then
+        export LLM_OPENAI_API_KEY=$try_token
+        for level in minimal low medium high max; do
+            export DIALECTIC_LEVELS__${level}__MODEL_CONFIG__OVERRIDES__API_KEY=$try_token
+        done
+        export SUMMARY_MODEL_CONFIG__OVERRIDES__API_KEY=$try_token
+        export DREAM_DEDUCTION_MODEL_CONFIG__OVERRIDES__API_KEY=$try_token
+        export DREAM_INDUCTION_MODEL_CONFIG__OVERRIDES__API_KEY=$try_token
+    fi
+fi
+# --- End Auth Fallbacks ---
+
     --forwarded-allow-ips "*"

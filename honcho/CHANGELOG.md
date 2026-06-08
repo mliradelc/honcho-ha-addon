@@ -1,8 +1,3 @@
-## [3.0.43] - 2026-06-06
-
-### Fixed
-- Migration failure
-
 ## [3.0.40] - 2026-05-31
 ### Changed
 - OpenConcho removed from this add-on. Use the new standalone OpenConcho add-on.
@@ -361,3 +356,8 @@ All notable changes to this project will be documented here. This project adhere
 
 ### Fixed
 - `config.yaml` schema: replaced invalid `enum?` type with `str?` (HA Supervisor does not support enum schema types).
+
+## [3.0.43]
+### Fixed
+- Fixed authentication propagation from Home Assistant options to dialectic model OVERRIDES to prevent 401 responses on Honcho API calls
+

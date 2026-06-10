@@ -1,3 +1,6 @@
+2026-06-10 - v3.0.33
+Fixed: Fix mistral transport (Unknown transport: mistral) to fallback to MISTRAL_API_KEY when OPENAI_API_KEY missing.
+
 ## [3.0.45] (2026-06-09)
 ### Fixed
 - Deriver health checks and sync reliability improvements
@@ -365,4 +368,3 @@ All notable changes to this project will be documented here. This project adhere
 ## [3.0.43]
 ### Fixed
 - Fixed authentication propagation from Home Assistant options to dialectic model OVERRIDES to prevent 401 responses on Honcho API calls
-

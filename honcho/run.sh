@@ -442,33 +442,16 @@ exec uvicorn src.main:app \
     --host 0.0.0.0 \
     --port "$API_PORT" \
     --log-level info \
-    --proxy-headers \
+    --forwarded-allow-ips "*"
 
 # --- Honcho Auth Fallbacks (Watchdog patch) ---
 if [ -z "${DIALECTIC_LEVELS__minimal__MODEL_CONFIG__TRANSPORT:-}" ]; then
-    export DIALECTIC_LEVELS__minimal__MODEL_CONFIG__TRANSPORT="${LLM_TRANSPORT:-openai}"
+    echo "[run] ERROR: Dialectic OVERRIDES missing for level minimal" >&2
+    exit 1
 fi
-if [ -z "${DIALECTIC_LEVELS__minimal__MODEL_CONFIG__MODEL:-}" ]; then
-    export DIALECTIC_LEVELS__minimal__MODEL_CONFIG__MODEL="${LLM_MODEL:-gpt-4o-mini}"
-fi
-if [ -f "/data/options.json" ] && [ -z "${LLM_OPENAI_API_KEY:-}" ]; then
-    try_token=$(python3 -c "import json,os;p='/data/options.json';print(json.load(open(p)).get('homeassistant_token',''))if os.path.exists(p)else'')" 2>/dev/null || echo "")
-    if [ -n "$try_token" ]; then
-        export LLM_OPENAI_API_KEY=$try_token
-
-# Ensure dialectic OVERRIDES vars are exported if set
-[ -n "${LLM_TRANSPORT:-}" ] && echo "DIALECTIC_LEVELS__1__MODEL_CONFIG__TRANSPORT=$LLM_TRANSPORT"
-[ -n "${LLM_MODEL:-}" ]     && echo "DIALECTIC_LEVELS__1__MODEL_CONFIG__MODEL=$LLM_MODEL"
-[ -n "${LLM_BASE_URL:-}" ]  && echo "DIALECTIC_LEVELS__1__MODEL_CONFIG__OVERRIDES__BASE_URL=$LLM_BASE_URL"
-[ -n "${LLM_API_KEY:-}" ]   && echo "DIALECTIC_LEVELS__1__MODEL_CONFIG__OVERRIDES__API_KEY=$LLM_API_KEY"
-
-        for level in minimal low medium high max; do
-            export DIALECTIC_LEVELS__${level}__MODEL_CONFIG__OVERRIDES__API_KEY=$try_token
-        done
-        export SUMMARY_MODEL_CONFIG__OVERRIDES__API_KEY=$try_token
-        export DREAM_DEDUCTION_MODEL_CONFIG__OVERRIDES__API_KEY=$try_token
-        export DREAM_INDUCTION_MODEL_CONFIG__OVERRIDES__API_KEY=$try_token
-    fi
+if [ -z "${LLM_TRANSPORT:-}" ]; then
+    echo "[run] ERROR: LLM/MODEL OVERRIDES missing" >&2
+    exit 1
 fi
 # --- End Auth Fallbacks ---
 

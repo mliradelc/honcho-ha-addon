@@ -446,11 +446,10 @@ exec uvicorn src.main:app \
 
 # --- Honcho Auth Fallbacks (Watchdog patch) ---
 if [ -z "${DIALECTIC_LEVELS__minimal__MODEL_CONFIG__TRANSPORT:-}" ]; then
-    echo "[run] ERROR: Dialectic OVERRIDES missing for level minimal" >&2
-    exit 1
+    echo "[run] WARNING: EXPLICIT Dialectic OVERRIDES missing for level minimal — falling back to inherited from LLM_* variables" >&2
 fi
 if [ -z "${LLM_TRANSPORT:-}" ]; then
-    echo "[run] ERROR: LLM/MODEL OVERRIDES missing" >&2
+    echo "[run] ERROR: Missing LLM/MODEL OVERRIDES — cannot start without any model transport configured" >&2
     exit 1
 fi
 # --- End Auth Fallbacks ---

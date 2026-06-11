@@ -4,7 +4,10 @@
 - Dockerfile cleaned: no more multi-stage OpenConcho builder (faster builds).
 - nginx restored to simple pass-through — no duplicate locations, no crash.
 
-# Changelog
+## [3.0.45] - 2026-06-11
+### Fixed
+- run.sh: create default `options.json` if missing to prevent downstream startup crashes
+- config.yaml: mark `openconcho_enabled` as optional (`?`) to match operational modes
 
 ## [3.0.41]
 ### Fixed

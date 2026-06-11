@@ -1,3 +1,15 @@
+## [3.0.46]
+### Fixed
+- Add /v3/ nginx location to Honcho web UI
+
+## [3.0.46]
+### Fixed
+- Add /v3/ nginx location to Honcho web UI
+
+## [3.0.46]
+### Fixed
+- Add /v3/ nginx location to Honcho web UI
+
 ## [3.0.40] - 2026-05-31
 ### Changed
 - OpenConcho removed from this add-on. Use the new standalone OpenConcho add-on.

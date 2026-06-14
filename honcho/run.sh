@@ -4,8 +4,32 @@ set -euo pipefail
 
 OPTIONS_FILE="/data/options.json"
 if [ ! -f "$OPTIONS_FILE" ]; then
-    echo "[run] FATAL: $OPTIONS_FILE not found"
-    exit 1
+    echo "[run] WARNING: $OPTIONS_FILE not found; proceeding with defaults"
+    # Create a default options file if missing to prevent downstream failures
+    cat > "$OPTIONS_FILE" <<'OPTIONS_EOF'
+{
+  "git_url": "https://github.com/mliradelc/honcho-1.git",
+  "git_ref": "",
+  "git_token": "",
+  "auto_update": false,
+  "db_mode": "embedded",
+  "db_url": "",
+  "redis_mode": "embedded",
+  "redis_url": "",
+  "api_port": 8000,
+  "access_password": "",
+  "llm_transport": "mistral",
+  "llm_model": "mistral-small-4-119b-2603-kinrw",
+  "llm_base_url": "https://chat.kiconnect.nrw/api/v1",
+  "llm_api_key": "",
+  "embedding_transport": "openai",
+  "embedding_model": "",
+  "embedding_base_url": "https://chat.kiconnect.nrw/api/v1",
+  "embedding_api_key": "",
+  "openconcho_enabled": true,
+  "env_vars": []
+}
+OPTIONS_EOF
 fi
 
 opt()    { jq -r ".${1} // empty" "$OPTIONS_FILE"; }
@@ -22,7 +46,6 @@ REDIS_MODE=$(opt redis_mode)
 REDIS_URL=$(opt redis_url)
 API_PORT=$(opt api_port)
 ACCESS_PASSWORD=$(opt access_password)
-
 
 # LLM / Embedding configuration for Honcho Deriver
 LLM_TRANSPORT=$(opt llm_transport)
@@ -98,6 +121,8 @@ REDIS_EOF
 # Clone / update Honcho source
 sync_source() {
     local src="$HONCHO_HOME/source"
+    mkdir -p "$src"
+    chown -R "$(id -u):$(id -g)" "$src" 2>/dev/null || true
     if [ ! -d "$src/.git" ]; then
         echo "[run] Cloning Honcho from $GIT_URL..."
         if [ -n "$GIT_TOKEN" ]; then
@@ -201,42 +226,6 @@ polling_sleep_interval_seconds = ${POLL_INTERVAL:-30}
 CONFIG_EOF
 }
 
-# Alter vector columns to match VECTOR_DIMENSIONS if they were created with a different dimension.
-# Called after postgres starts, before Alembic runs.  Safe to call on fresh installs (no-op).
-fix_vector_dimensions() {
-    local target_dim="${EMBEDDING_VECTOR_DIMENSIONS:-1536}"
-    echo "[run] Checking pgvector column dimensions (target: $target_dim)..."
-    su -s /bin/bash postgres -c \
-        "psql -h 127.0.0.1 -p 5433 -U postgres -d postgres" << PGSQL 2>&1 | tee -a "$HONCHO_HOME/logs/psql.log" || true
-DO \$\$
-DECLARE
-    r      RECORD;
-    cur_dim INT;
-    target  INT := $target_dim;
-BEGIN
-    FOR r IN
-        SELECT c.table_name, c.column_name
-        FROM information_schema.columns c
-        WHERE c.udt_name = 'vector' AND c.table_schema = 'public'
-    LOOP
-        SELECT a.atttypmod INTO cur_dim
-        FROM pg_attribute a
-        JOIN pg_class cl ON a.attrelid = cl.oid
-        WHERE cl.relname = r.table_name AND a.attname = r.column_name;
-
-        IF cur_dim IS NOT NULL AND cur_dim <> target THEN
-            RAISE NOTICE 'Resetting %.% from vector(%) to vector(%)',
-                r.table_name, r.column_name, cur_dim, target;
-            -- Clear embeddings so ALTER TYPE succeeds (no cast between different dims)
-            EXECUTE format('UPDATE %I SET %I = NULL', r.table_name, r.column_name);
-            EXECUTE format('ALTER TABLE %I ALTER COLUMN %I TYPE vector(%s)',
-                r.table_name, r.column_name, target);
-        END IF;
-    END LOOP;
-END \$\$;
-PGSQL
-}
-
 # Start nginx — simple reverse proxy to Honcho FastAPI
 start_nginx() {
     echo "[run] Starting nginx..."
@@ -272,6 +261,14 @@ http {
             proxy_http_version 1.1;
             proxy_set_header   Upgrade \$http_upgrade;
             proxy_set_header   Connection "upgrade";
+        }
+        location /v3/ {
+            proxy_pass         http://127.0.0.1:${API_PORT}/v3/;
+            proxy_set_header   Host \$host;
+            proxy_set_header   X-Real-IP \$remote_addr;
+            proxy_set_header   X-Forwarded-For \$proxy_add_x_forwarded_for;
+            proxy_set_header   X-Forwarded-Proto \$scheme;
+            proxy_http_version 1.1;
         }
     }
 }
@@ -376,6 +373,9 @@ apply_llm_config() {
         [ -n "${LLM_MODEL:-}" ]            && echo "DREAM_INDUCTION_MODEL_CONFIG__MODEL=$LLM_MODEL"
         [ -n "${LLM_BASE_URL:-}" ]         && echo "DREAM_INDUCTION_MODEL_CONFIG__OVERRIDES__BASE_URL=$LLM_BASE_URL"
         [ -n "${LLM_API_KEY:-}" ]          && echo "DREAM_INDUCTION_MODEL_CONFIG__OVERRIDES__API_KEY=$LLM_API_KEY"
+        # Dream thinking effort — Mistral Small 4 requires "high" for reasoning
+        [ -n "${LLM_TRANSPORT:-}" ]        && echo "DREAM_DEDUCTION_MODEL_CONFIG__THINKING_EFFORT=high"
+        [ -n "${LLM_TRANSPORT:-}" ]        && echo "DREAM_INDUCTION_MODEL_CONFIG__THINKING_EFFORT=high"
 
         # Embedding
         [ -n "${EMBEDDING_TRANSPORT:-}" ]  && echo "EMBEDDING_MODEL_CONFIG__TRANSPORT=$EMBEDDING_TRANSPORT"
@@ -404,6 +404,7 @@ SUMMARY_ENABLED=true
 DREAM_ENABLED=true
 DREAM_SURPRISAL__ENABLED=true
 DERIVER_FEATURES
+
 echo "[run] Deriver feature flags appended to .env"
 
 # 3. Sync source and install dependencies, then migrate
@@ -444,15 +445,19 @@ exec uvicorn src.main:app \
     --log-level info \
     --forwarded-allow-ips "*"
 
-# --- Honcho Auth Fallbacks (Watchdog patch) ---
-if [ -z "${DIALECTIC_LEVELS__minimal__MODEL_CONFIG__TRANSPORT:-}" ]; then
-    echo "[run] ERROR: Dialectic OVERRIDES missing for level minimal" >&2
-    exit 1
-fi
-if [ -z "${LLM_TRANSPORT:-}" ]; then
-    echo "[run] ERROR: LLM/MODEL OVERRIDES missing" >&2
-    exit 1
-fi
-# --- End Auth Fallbacks ---
+cd "$HONCHO_HOME/source"
+source "$HONCHO_HOME/venv/bin/activate"
 
+# Start the deriver worker in the background (queue consumer for memory extraction)
+echo "[run] Starting Honcho deriver worker..."
+python -m src.deriver >> "$HONCHO_HOME/logs/deriver.log" 2>&1 &
+DERIVER_PID=$!
+echo "[run] Deriver PID: $DERIVER_PID"
+# Stream deriver log to stdout so entries appear in HA log viewer
+tail -F "$HONCHO_HOME/logs/deriver.log" &
+
+exec uvicorn src.main:app \
+    --host 0.0.0.0 \
+    --port "$API_PORT" \
+    --log-level info \
     --forwarded-allow-ips "*"

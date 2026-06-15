@@ -1,0 +1,51 @@
+# Gitleaks configuration for honcho-ha-addon
+# Used by: pre-commit hook, CI workflow, and local gitleaks scans
+#
+# Run manually:
+#   gitleaks detect --source . --config .gitleaks.toml --verbose
+#
+# Run as pre-commit:
+#   gitleaks protect --staged --config .gitleaks.toml --verbose
+
+title = "honcho-ha-addon gitleaks config"
+
+# Allowlist — false positives we've reviewed
+[allowlist]
+  description = "Known false positives"
+  
+  # These are placeholder/demo values, not real secrets
+  paths = [
+    '''^honcho/config\.yaml$''',  # Schema has "password?" type markers — let pre-commit hook handle this
+  ]
+  
+  # Specific strings to allow (schema documentation, examples)
+  regexes = [
+    '''password\?''',           # HA add-on schema type markers
+    '''\*\*\*''',               # Redacted/masked values
+  ]
+
+# Custom rules for additional patterns
+[[rules]]
+  id = "nvapi-key"
+  description = "NVIDIA build API key (nvapi-...)"
+  regex = '''nvapi-[A-Za-z0-9_\-]{40,}'''
+  tags = ["api-key", "nvidia"]
+
+[[rules]]
+  id = "generic-api-key-in-config"
+  description = "Generic API keys in YAML config files"
+  regex = '''(api_key|apikey|token|secret):\s*["'][A-Za-z0-9_\-\.]{20,}["']'''
+  path = '''\.(yaml|yml|json|toml|env)$'''
+  tags = ["api-key", "config"]
+
+[[rules]]
+  id = "github-token"
+  description = "GitHub personal access tokens"
+  regex = '''gh[pousr]_[A-Za-z0-9_]{20,}'''
+  tags = ["token", "github"]
+
+[[rules]]
+  id = "private-key"
+  description = "Private key blocks"
+  regex = '''-----BEGIN\s.*PRIVATE KEY-----'''
+  tags = ["key", "crypto"]
